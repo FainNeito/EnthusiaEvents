@@ -69,3 +69,13 @@ The user then put testing on hold. This follow-up reconciles documentation, rele
 The subsequent implementation request adds ROAD-001 through ROAD-007 source on a separate branch. No compilation, plugin tests, packaging or server/client actions were performed. The prior passing suite/API evidence does not apply to this new head. Source inspection and `git diff --check` are the only code checks claimed during the hold. Future failure/regression and runtime gates are in roadmap-work.md.
 
 The [implementation-state preview](https://chatgpt.com/space/page_ccbed6c3c180819187bfc13e2457aabc) was saved and read back. Local fixture controls rendered at 360px, with preview root clientWidth=scrollWidth=328px. This is presentation inspection only. Owner login is required; authenticated phone access and real Minecraft rendering remain unverified.
+
+## Completion verification 2026-10-09
+
+Renewed request lifts local testing/build hold and authorizes reviewed merge, without server deployment. Java 25.0.3 and Maven 3.9.11 canonical clean verify passed 55 tests, zero failures/errors/skips, and PMD. Separate clean verify with Paper 26.2.build.128-stable passed the same 55 tests and PMD. Canonical declared profile remains 26.2.build.39-alpha.
+
+Coverage: capture publication failure; post-application acknowledgement failure and restart isolation; malformed-history rejection; state/permission-bound historical application with persisted undo/no second application; lease generation/corruption/failed acknowledgement; archive tamper detection and resolved-only retention; supported container boundaries; arena disk reconstruction, identity/corruption/unloaded retry/replay verification; preflight budgets; scoring; seasonal idempotency/restart/exclusions/grace/policy corruption and cosmetic ownership. Paper serialization is mocked; native NBT round trips remain pending. Service/disk reconstruction is not real server process-kill proof.
+
+Three assertion regressions were observed before correction: malformed historical health accepted (events-completion-malformed-red.log, 1 assertion failure), external builders blocked and stale round callback cancelling replacement (events-speed-red.log, 2 assertion failures). Task-local logs live under operations outside source. Fixture registry initialization errors are not product regression evidence. Current canonical/API logs: events-completion-canonical.log and events-completion-runtime-api.log. No server operations occurred.
+
+No EARS/state helpers exist; manual requirement/task evidence applies. Exact-head CI/review, upstream merge and Paper/Java/Bedrock acceptance remain separate. Connected upstream account has pull-only permissions and cannot approve workflows or merge.

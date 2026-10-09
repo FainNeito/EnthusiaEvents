@@ -45,10 +45,21 @@ All three findings are corrected; three focused assertions failed on the reviewe
 - [x] Add loaded-world preflight, confirmed snapshot capture/archive, ordinary-block arena recovery, private Speedbuilders and season-count source slices.
 - [x] Inspect domain/platform boundaries, opt-in defaults, failure retention, start fences and legacy reset ordering in source.
 - [x] Deliver fixture-only interactive states; saved Page readback and local phone-width layout inspection are distinct from client acceptance.
-- [ ] Compile, focused failure regressions and supported API verification after the hold is lifted.
-- [ ] Tile/container codecs, historical apply/reconciliation, archive retention and seasonal personal-best/cosmetic slices.
+- [x] Compile, focused failure regressions and supported API verification after the hold was lifted.
+- [x] Supported container codecs, historical apply/reconciliation, retention and seasonal personal-best/cosmetic slices implemented below.
 - [ ] Exact-head CI, code/human review, disposable crash proof, Java/Bedrock and donor acceptance.
 
 See roadmap-work.md for actual implementation scope and remaining boundaries. Historical passing results above apply only to PR #15, not this new source.
 
 This follow-up changes documentation and command help only. Spec/source inspection and text consistency checks apply; behavioral proof and engine implementation do not apply because no gameplay or persistence behavior changes. No local test/build or server action is performed during this follow-up. Existing PR workflows may run automatically when the branch is updated; their results are recorded separately.
+
+## Completion pass
+
+- [x] Supported container codec and automated replay verification.
+- [x] Historical preview/confirm, undo and durable uncertainty reconciliation; resolved-only retention.
+- [x] Seasonal participation/grace, personal bests, owned cosmetic selection.
+- [x] Regression proof and canonical/API matrix: 55 tests and PMD on each profile.
+- [ ] Exact-head hosted review/CI and merge authorized source; upstream account is read-only.
+- [x] Refresh interactive preview and confirm saved Page readback.
+
+Local testing hold lifted by renewed request; no production action authorized.

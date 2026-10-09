@@ -29,3 +29,15 @@ The renewed request authorizes draft source implementation; the earlier testing 
 - ROAD-007: While testing is held, this source shall remain an uncompiled, unverified draft without a JAR or server activation; future behavioral proof, client acceptance and release gates remain open.
 
 Evidence: task-local Discord playtest audit and static SurfEvents inspection, retained outside this repository. Public source findings and regression proof are recorded in verification.md.
+
+## Completion authorization 2026-10-09
+
+The user requested all remaining source work and merging once verified. This lifts the prior local testing/build hold and authorizes reviewed merges; it does not authorize deployment or server operations. Historical hold statements above describe previous deliveries.
+
+- FULL-001: When recovery includes supported loot containers, the system shall preserve canonical block data, complete inventory metadata, tile PDC and name for unlocked Chest/Barrel state; locked or loot-table/refill containers and unsupported tile kinds shall still fail closed.
+- FULL-002: When staff apply a resolved historical player version, the system shall bind a short-lived confirmation to actor, target, version checksum, reason and current state; persist an undo record and application lease before mutation; quarantine uncertain outcomes across restart, and permit explicit audited reconciliation without replay.
+- FULL-003: When history retention is enabled, the system shall prune only verified resolved versions beyond configured count/age, preserve pending/corrupt/leased records and expose retained-storage warnings.
+- FULL-004: When a season completion is credited, the system shall enforce configured active-participation and closing-grace thresholds, retain supported per-game personal bests and derive durable own-ledger cosmetic ownership; configurable cosmetics shall be selectable only by owners without currency or external grants.
+- FULL-005: Before authorized merges, the system shall pass focused persistence/rollback/restart regressions, full canonical verification, supported API checks and inspect exact-head CI/review. Client acceptance and deployment remain separately recorded.
+
+Settings remain disabled and unconfigured by default. No live dates, prices, reward provider, server configuration or external grant policy is chosen.

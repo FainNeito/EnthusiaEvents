@@ -82,8 +82,7 @@ public final class Speedbuilders implements Listener {
         for (UUID player : session.participants()) {
             plots.put(player, available.get(i)); totals.put(player, 0);
             Player online = plugin.getServer().getPlayer(player);
-            manager.allowTeleport(player);
-            if (online == null || !online.teleport(session.selectedMap().spawns().get(names.get(i++)))) {
+            if (online == null || !manager.teleportGameParticipant(online, session.selectedMap().spawns().get(names.get(i++)))) {
                 manager.stop("Speedbuilders plot teleport failed"); stop(); return;
             }
         }
@@ -146,7 +145,8 @@ public final class Speedbuilders implements Listener {
         long token = ++generation;
         int[] remaining = {seconds};
         task = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
-            if (!current() || token != generation) { stop(); return; }
+            if (token != generation) return;
+            if (!current()) { stop(); return; }
             players(p -> p.sendActionBar(net.kyori.adventure.text.Component.text("Round " + round + " · " + phase + " · " + remaining[0] + "s")));
             if (remaining[0]-- <= 0) { task.cancel(); task = null; next.run(); }
         }, 0L, 20L);
@@ -157,7 +157,8 @@ public final class Speedbuilders implements Listener {
         for (CuboidRegion plot : plots.values()) for (Offset offset : offsets(plot)) cells.add(Map.entry(plot, offset));
         int[] cursor = {0};
         task = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
-            if (!current() || token != generation) { stop(); return; }
+            if (token != generation) return;
+            if (!current()) { stop(); return; }
             try {
                 World world = plugin.getServer().getWorld(tracked.selectedMap().worldName());
                 for (int n = 0; n < 128 && cursor[0] < cells.size(); n++, cursor[0]++) {
@@ -189,8 +190,13 @@ public final class Speedbuilders implements Listener {
     private void players(Consumer<Player> action) { for (UUID uuid : plots.keySet()) { Player p = plugin.getServer().getPlayer(uuid); if (p != null && tracked.participants().contains(uuid)) action.accept(p); } }
     private boolean game() { return manager.session() != null && manager.session().definition().type() == EventType.SPEEDBUILDERS; }
     private boolean mayEdit(Player p, Location location) { return current() && phase.equals("build") && tracked.participants().contains(p.getUniqueId()) && plots.containsKey(p.getUniqueId()) && plots.get(p.getUniqueId()).contains(location); }
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false) public void place(BlockPlaceEvent e) { if (game() && (!mayEdit(e.getPlayer(), e.getBlock().getLocation()) || !palette.contains(e.getBlock().getType()))) e.setCancelled(true); }
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false) public void breakBlock(BlockBreakEvent e) { if (game()) { if (!mayEdit(e.getPlayer(), e.getBlock().getLocation())) e.setCancelled(true); else { e.setDropItems(false); e.setExpToDrop(0); } } }
+    private boolean protectedEdit(Player player, Location location) {
+        if (!game()) return false;
+        EventMap map = manager.session().selectedMap();
+        return manager.isEventPlayer(player.getUniqueId()) || map != null && map.region() != null && map.region().contains(location);
+    }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false) public void place(BlockPlaceEvent e) { if (protectedEdit(e.getPlayer(), e.getBlock().getLocation()) && (!mayEdit(e.getPlayer(), e.getBlock().getLocation()) || !palette.contains(e.getBlock().getType()))) e.setCancelled(true); }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false) public void breakBlock(BlockBreakEvent e) { if (protectedEdit(e.getPlayer(), e.getBlock().getLocation())) { if (!mayEdit(e.getPlayer(), e.getBlock().getLocation())) e.setCancelled(true); else { e.setDropItems(false); e.setExpToDrop(0); } } }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true) public void replenish(BlockBreakEvent e) {
         if (game() && mayEdit(e.getPlayer(), e.getBlock().getLocation()) && palette.contains(e.getBlock().getType())) e.getPlayer().getInventory().addItem(new ItemStack(e.getBlock().getType(), 1));
     }

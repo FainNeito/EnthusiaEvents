@@ -64,7 +64,7 @@ final class AdminCommandTabCompleter {
             case "invite", "restore", "stuckcheck", "emergencyrestore", "remove" -> onlinePlayers(args[1]);
             case "autostart" -> AdminCommandSupport.filter(args[1], List.of("on", "off", "status"));
             case "kit" -> AdminCommandSupport.filter(args[1], List.of("save", "list", "select", "override"));
-            case "recovery" -> AdminCommandSupport.filter(args[1], List.of("list", "inspect", "retry", "player"));
+            case "recovery" -> AdminCommandSupport.filter(args[1], List.of("list", "inspect", "retry", "player", "preview", "reconcile", "confirm", "prune"));
             default -> List.of();
         };
     }

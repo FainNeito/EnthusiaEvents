@@ -30,7 +30,7 @@ Traces store session/event/map/phase, lifecycle actions and player UUIDs; they c
 
 Runner is absent from the default `events.enabled` list. To test it, staff must add `RUNNER`, reload while no event is active, and create a map with region, spawns, spectator and a `breakable-area` covering floor blocks. Use existing `/ee map create`, `/ee setup RUNNER <mapId>`, area tools, save and `/ee readiness RUNNER`.
 
-Floor blocks underneath moving participants disappear after four ticks. Only the intersection of the floor area and arena region may change. Original block state is recorded before removal; delayed tasks are fenced to the same active session. PvP is blocked, hunger is locked, falling below the region eliminates players, and the existing last-player-standing/outcome/snapshot path applies. Private Runner matches and restoration must pass before adding it to public rotation. Speedbuilders now has an unverified private source implementation described in roadmap-work.md; Paint Panic remains a future option.
+Floor blocks underneath moving participants disappear after four ticks. Only the intersection of the floor area and arena region may change. Original block state is recorded before removal; delayed tasks are fenced to the same active session. PvP is blocked, hunger is locked, falling below the region eliminates players, and the existing last-player-standing/outcome/snapshot path applies. Private Runner matches and restoration must pass before adding it to public rotation. Speedbuilders now has a private implementation with automated verification and pending client acceptance described in roadmap-work.md; Paint Panic remains a future option.
 
 ## Architecture and preview
 

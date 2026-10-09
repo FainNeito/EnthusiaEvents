@@ -121,6 +121,7 @@ public final class EventOutcomeService {
         }
 
         if (session.phase() == EventPhase.ACTIVE) {
+            if (plugin.seasonProgress() != null) plugin.seasonProgress().sample(session);
             if (!activeRosterFrozen) {
                 freezeActiveRoster(session);
             }
@@ -168,7 +169,10 @@ public final class EventOutcomeService {
         }
 
         Set<UUID> winners = intendedWinners(completedType, completedRankings);
-        if (plugin.seasonProgress() != null) plugin.seasonProgress().complete(session, winners);
+        if (plugin.seasonProgress() != null) {
+            plugin.seasonProgress().complete(session, winners);
+            for (UUID winner : winners) plugin.seasonProgress().showVictoryTitle(session, winner);
+        }
         for (UUID uuid : activeRoster) {
             OutcomeBaseline baseline = baselines.get(uuid);
             if (baseline == null) {

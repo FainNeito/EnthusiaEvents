@@ -68,6 +68,7 @@ public final class ArenaRecovery {
         int count = (int) (dx * dy * dz);
         List<Cell> cells = new ArrayList<>(count);
         int[] cursor = {0};
+        long[] payloadBytes = {1024};
         restoreAfterWrite = false;
         work = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             try {
@@ -79,8 +80,11 @@ public final class ArenaRecovery {
                     int z = (int) Math.floor(region.minZ()) + index / (int) (dx * dy);
                     if (!world.isChunkLoaded(x >> 4, z >> 4)) throw new IOException("Unloaded recovery chunk " + (x >> 4) + "," + (z >> 4));
                     var block = world.getBlockAt(x, y, z);
-                    if (block.getState() instanceof TileState) throw new IOException("Unsupported tile at " + x + "," + y + "," + z + "; no lossless codec yet");
-                    cells.add(new Cell(x, y, z, block.getBlockData().getAsString()));
+                    String tile = ContainerCodec.capture(block.getState());
+                    String blockData = block.getBlockData().getAsString();
+                    payloadBytes[0] += 32L + blockData.length() * 3L + tile.length() * 3L;
+                    if (tile.length() > 2 * 1024 * 1024 || payloadBytes[0] > MAX_FILE_BYTES - 128) throw new IOException("Baseline payload budget exceeded");
+                    cells.add(new Cell(x, y, z, blockData, tile));
                 }
                 if (cursor[0] < count) return;
                 cancelWork();
@@ -141,9 +145,13 @@ public final class ArenaRecovery {
                     if (cell.y() < world.getMinHeight() || cell.y() >= world.getMaxHeight()) throw new IOException("World height changed; manual reconciliation required");
                     if (!world.isChunkLoaded(cell.x() >> 4, cell.z() >> 4)) throw new IOException("Restore chunk unloaded; load it and retry");
                     var block = world.getBlockAt(cell.x(), cell.y(), cell.z());
-                    if (block.getState() instanceof TileState) throw new IOException("Unexpected tile encountered; manual reconciliation required");
-                    if (!verifying[0]) block.setBlockData(plugin.getServer().createBlockData(cell.data()), false);
-                    if (!block.getBlockData().getAsString().equals(cell.data())) throw new IOException("Block verification failed");
+                    if (!verifying[0]) {
+                        ContainerCodec.capture(block.getState()); // preserve unexpected unsupported tile by refusing overwrite
+                        block.setBlockData(plugin.getServer().createBlockData(cell.data()), false);
+                        if (!cell.tile().isEmpty()) ContainerCodec.apply(block, cell.tile());
+                    }
+                    if (!block.getBlockData().getAsString().equals(cell.data())
+                            || !ContainerCodec.capture(block.getState()).equals(cell.tile())) throw new IOException("Block/tile verification failed");
                 }
                 if (cursor[0] < restoring.cells().size()) return;
                 if (!verifying[0]) { verifying[0] = true; cursor[0] = 0; return; }
@@ -171,13 +179,13 @@ public final class ArenaRecovery {
     private static byte[] encode(Baseline baseline) throws IOException {
         ByteArrayOutputStream payload = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(payload)) {
-            out.writeUTF("EE-ARENA-2"); out.writeUTF(baseline.session().toString()); out.writeUTF(baseline.world().toString());
+            out.writeUTF("EE-ARENA-3"); out.writeUTF(baseline.session().toString()); out.writeUTF(baseline.world().toString());
             out.writeUTF(baseline.type().name()); out.writeUTF(baseline.map());
             CuboidRegion r = baseline.region(); out.writeUTF(r.worldName());
             out.writeDouble(r.minX()); out.writeDouble(r.minY()); out.writeDouble(r.minZ());
             out.writeDouble(r.maxX()); out.writeDouble(r.maxY()); out.writeDouble(r.maxZ());
             out.writeInt(baseline.cells().size());
-            for (Cell c : baseline.cells()) { out.writeInt(c.x()); out.writeInt(c.y()); out.writeInt(c.z()); out.writeUTF(c.data()); }
+            for (Cell c : baseline.cells()) { out.writeInt(c.x()); out.writeInt(c.y()); out.writeInt(c.z()); out.writeUTF(c.data()); byte[] tile = c.tile().getBytes(java.nio.charset.StandardCharsets.UTF_8); out.writeInt(tile.length); out.write(tile); }
         }
         byte[] bytes = payload.toByteArray();
         if (bytes.length > MAX_FILE_BYTES - 128) throw new IOException("Baseline too large");
@@ -192,7 +200,8 @@ public final class ArenaRecovery {
             byte[] payload = in.readNBytes(size);
             if (!hash.equals(PlayerSnapshotArchive.digest(payload))) throw new IOException("Baseline integrity mismatch");
             try (DataInputStream data = new DataInputStream(new ByteArrayInputStream(payload))) {
-                if (!data.readUTF().equals("EE-ARENA-2")) throw new IOException("Unsupported schema");
+                String schema = data.readUTF();
+                if (!schema.equals("EE-ARENA-3") && !schema.equals("EE-ARENA-2")) throw new IOException("Unsupported schema");
                 UUID session = UUID.fromString(data.readUTF()), world = UUID.fromString(data.readUTF());
                 EventType type = EventType.parse(data.readUTF()); String map = data.readUTF();
                 CuboidRegion region = new CuboidRegion(data.readUTF(), data.readDouble(), data.readDouble(), data.readDouble(), data.readDouble(), data.readDouble(), data.readDouble());
@@ -202,7 +211,10 @@ public final class ArenaRecovery {
                 List<Cell> cells = new ArrayList<>(count);
                 Set<String> coordinates = new HashSet<>();
                 for (int i = 0; i < count; i++) {
-                    Cell cell = new Cell(data.readInt(), data.readInt(), data.readInt(), data.readUTF());
+                    int x = data.readInt(), y = data.readInt(), z = data.readInt(); String blockData = data.readUTF();
+                    int tileLength = schema.equals("EE-ARENA-3") ? data.readInt() : 0;
+                    if (tileLength < 0 || tileLength > 2 * 1024 * 1024 || tileLength > data.available()) throw new IOException("Invalid tile payload size");
+                    Cell cell = new Cell(x, y, z, blockData, new String(data.readNBytes(tileLength), java.nio.charset.StandardCharsets.UTF_8));
                     if (cell.x() < region.minX() || cell.x() > region.maxX() || cell.y() < region.minY() || cell.y() > region.maxY()
                             || cell.z() < region.minZ() || cell.z() > region.maxZ() || !coordinates.add(cell.x() + ":" + cell.y() + ":" + cell.z())) throw new IOException("Invalid/duplicate baseline cell");
                     cells.add(cell);
@@ -212,7 +224,7 @@ public final class ArenaRecovery {
             }
         }
     }
-    private record Cell(int x, int y, int z, String data) { }
+    private record Cell(int x, int y, int z, String data, String tile) { }
     private static boolean integerBounds(CuboidRegion r) {
         for (double value : new double[]{r.minX(), r.minY(), r.minZ(), r.maxX(), r.maxY(), r.maxZ()}) {
             if (!Double.isFinite(value) || value != Math.floor(value) || Math.abs(value) > 30_000_000) return false;

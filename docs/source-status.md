@@ -1,6 +1,8 @@
 # Source status and deferred acceptance
 
-New roadmap implementation on this branch is uncompiled and untested under the active testing hold. The evidence below describes the earlier PR #15 slice only; see [roadmap-work.md](roadmap-work.md) for the new draft and its open gates.
+Current PR #17 implements recovery/progression and includes unmerged PR #15. Canonical and explicit stable API clean verification each passed 55 tests and PMD. Local testing/builds resumed; reviewed merging is authorized, while deployment/client acceptance remain separate. See [roadmap-work.md](roadmap-work.md) for current behavior and limits. Upstream workflow approval and merge require write access unavailable to the connected account.
+
+The dated evidence below describes the earlier PR #15 delivery; its testing-hold statements are historical.
 
 This matrix reconciles the prior playtest audit, authoritative main and PR #15. Original private Discord evidence remains task-local. Source protections and automated regression evidence are distinct from deployment and player acceptance. Testing is currently on hold.
 

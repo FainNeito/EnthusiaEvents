@@ -112,6 +112,10 @@ recovery:
     blocks-per-tick: 128
   player-history:
     enabled: false
+    retention:
+      enabled: false
+      keep-resolved: 5
+      days: 30
     # Inspection only. This first slice retains every archive; pending records are never pruned.
 
 speedbuilders:
@@ -127,6 +131,11 @@ seasons:
   namespace: ''
   display-timezone: UTC
   minimum-active-seconds: 60
+  idle-seconds: 60
+  closing-grace-seconds: 0
+  # Optional own-ledger victory titles: <id>: {title: '...', completed: <count>, wins: <count>}
+  # Catalogue and thresholds seal on first ACTIVE session in each season. No external grants.
+  cosmetics: {}
   # Configure explicit immutable IDs with ISO-8601 UTC start/end instants. Retain closed definitions.
   definitions: {}
 

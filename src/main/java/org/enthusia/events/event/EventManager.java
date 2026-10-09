@@ -543,6 +543,7 @@ public final class EventManager {
         if (session == null || session.phase() != EventPhase.ACTIVE || !session.participants().remove(player.getUniqueId())) {
             return;
         }
+        if (plugin.seasonProgress() != null) plugin.seasonProgress().finished(session, player.getUniqueId());
         cleanupBoatRacePlayer(player.getUniqueId());
         if (!session.finalRankings().contains(player.getUniqueId())) {
             session.finalRankings().add(player.getUniqueId());
@@ -2002,6 +2003,14 @@ public final class EventManager {
             return;
         }
         Bukkit.broadcast(message);
+    }
+
+    public boolean teleportGameParticipant(Player player, Location destination) {
+        if (player == null || destination == null || session == null || session.phase() != EventPhase.ACTIVE
+                || !session.participants().contains(player.getUniqueId()) || session.selectedMap() == null
+                || session.selectedMap().region() == null || !session.selectedMap().region().contains(destination)) return false;
+        allowTeleport(player.getUniqueId());
+        return player.teleport(destination);
     }
 
     private void allowTeleport(UUID uuid) {

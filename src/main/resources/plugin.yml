@@ -28,3 +28,7 @@ permissions:
     default: op
   enthusia.events.recovery.retry:
     default: op
+
+  enthusia.events.recovery.apply:
+    description: Apply, reconcile and prune player history with explicit confirmation
+    default: op

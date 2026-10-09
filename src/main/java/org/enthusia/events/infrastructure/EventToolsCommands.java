@@ -74,7 +74,25 @@ public final class EventToolsCommands {
     }
     private void recovery(CommandSender sender, String[] args) throws IOException {
         if (!sender.hasPermission("enthusia.events.recovery.inspect")) throw new IllegalArgumentException("No recovery inspection permission.");
+        if (args.length >= 4 && List.of("preview", "reconcile").contains(args[1].toLowerCase(Locale.ROOT))) {
+            boolean reconcile = args[1].equalsIgnoreCase("reconcile");
+            int reasonIndex = reconcile ? 3 : 4;
+            if (args.length <= reasonIndex) throw new IllegalArgumentException("Supply target UUID, capture UUID (preview only), and a reconciliation reason");
+            UUID target = UUID.fromString(args[2]);
+            UUID capture = reconcile ? target : UUID.fromString(args[3]);
+            String reason = String.join(" ", java.util.Arrays.copyOfRange(args, reasonIndex, args.length));
+            plugin.snapshots().previewHistorical(sender, plugin.getServer().getPlayer(target), capture, reason, reconcile).forEach(sender::sendMessage);
+            return;
+        }
+        if (args.length == 3 && args[1].equalsIgnoreCase("confirm")) {
+            sender.sendMessage(plugin.snapshots().confirmHistorical(sender, UUID.fromString(args[2]))); return;
+        }
+        if (args.length == 3 && args[1].equalsIgnoreCase("prune")) {
+            if (!sender.hasPermission("enthusia.events.recovery.apply")) throw new IllegalArgumentException("No recovery apply permission");
+            plugin.snapshots().pruneHistory(UUID.fromString(args[2])).forEach(sender::sendMessage); return;
+        }
         if (args.length == 3 && args[1].equalsIgnoreCase("player")) {
+            sender.sendMessage("Recovery state: " + plugin.snapshots().recoveryState(UUID.fromString(args[2])));
             plugin.snapshots().history(UUID.fromString(args[2])).forEach(sender::sendMessage); return;
         }
         if (args.length == 2 && List.of("list", "inspect").contains(args[1].toLowerCase(Locale.ROOT))) {
@@ -86,7 +104,7 @@ public final class EventToolsCommands {
             if (reset.pendingBlocks() > 0) throw new IllegalArgumentException("Retry retained legacy blocks with /ee resetarena before durable recovery.");
             plugin.arenaRecovery().retry(); sender.sendMessage(plugin.arenaRecovery().status()); return;
         }
-        throw new IllegalArgumentException("/ee recovery <list|inspect|retry|player <uuid>>; historical inventory application is unavailable");
+        throw new IllegalArgumentException("/ee recovery <list|inspect|retry|player|prune <uuid>|preview <uuid> <capture> <reason>|reconcile <uuid> <reason>|confirm <token>>");
     }
     private void loot(CommandSender sender, String[] args) throws IOException {
         if (args.length < LOOT_ARGUMENT_COUNT) throw new IllegalArgumentException("/ee loot <SKYWARS|BEDWARS> <1-3> [sample|edit <id> <min> <max> <chance 0-1>|limits <armor> <weapons> <total>]");
