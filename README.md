@@ -6,6 +6,7 @@ EnthusiaEvents is a Paper/Leaf event plugin for running scheduled, voted, privat
 
 ## Documentation
 
+- [`docs/requirements.md`](docs/requirements.md), [`docs/implementation.md`](docs/implementation.md), [`docs/tasks.md`](docs/tasks.md), and [`docs/verification.md`](docs/verification.md) — proposed recovery, preflight, Speedbuilders and seasonal roadmap. These additions are not implemented; testing remains on hold.
 - [`PLAYER_GUIDE.md`](PLAYER_GUIDE.md) — current player-facing mechanics and live Enthusia SMP deployment behavior. Use this as the primary source for future wiki/player documentation.
 - [`Specifications.md`](Specifications.md) — original/development specification; some deployment values and older design statements may no longer match current code/config.
 - [`TESTING.md`](TESTING.md) — implementation/testing coverage.

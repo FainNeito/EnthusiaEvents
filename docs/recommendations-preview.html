@@ -1,0 +1,104 @@
+<div id="events-recommendations">
+  <h3>Proposed feature behavior</h3>
+  <div class="viz-controls">
+    <label class="form-label">Feature
+      <select class="form-select" aria-label="Feature">
+        <option value="arena">Crash-safe arena recovery</option>
+        <option value="player">Versioned player recovery</option>
+        <option value="preflight">Arena preflight</option>
+        <option value="build">Speedbuilders</option>
+        <option value="season">Seasonal progression</option>
+      </select>
+    </label>
+    <label class="form-label">Scenario
+      <select class="form-select" aria-label="Scenario"></select>
+    </label>
+  </div>
+  <ol class="proposal-flow" aria-label="Proposed lifecycle"></ol>
+  <div aria-live="polite">
+    <h3 class="proposal-state"></h3>
+    <p class="proposal-result"></p>
+    <p class="proposal-boundary text-muted"></p>
+  </div>
+  <div class="viz-row">
+    <button type="button" class="btn" data-step="back">Previous state</button>
+    <button type="button" class="btn btn-primary" data-step="next">Next state</button>
+  </div>
+  <p class="text-small">Proposal only · fixture data · no server actions</p>
+</div>
+<style>
+  #events-recommendations { max-width:100%; overflow-wrap:anywhere; }
+  #events-recommendations .proposal-flow { display:grid; gap:8px; padding-left:24px; }
+  #events-recommendations .proposal-flow li { padding:4px 0; color:var(--muted-foreground); }
+  #events-recommendations .proposal-flow li[aria-current="step"] { color:var(--foreground); font-weight:500; }
+</style>
+<script>
+(function () {
+  const root = document.getElementById('events-recommendations');
+  const feature = root.querySelector('[aria-label="Feature"]');
+  const scenario = root.querySelector('[aria-label="Scenario"]');
+  const flow = root.querySelector('.proposal-flow');
+  const heading = root.querySelector('.proposal-state');
+  const result = root.querySelector('.proposal-result');
+  const boundary = root.querySelector('.proposal-boundary');
+  const back = root.querySelector('[data-step="back"]');
+  const next = root.querySelector('[data-step="next"]');
+  const designs = {
+    arena: { boundary:'All starts remain blocked until verified recovery completes. Unsupported tile state or unavailable durability quarantines the arena.', scenarios:[
+      {name:'Crash and successful recovery',steps:[['Prepare','Capture permitted arena blocks and supported container data while the arena is leased.'],['Commit','Baseline and manifest are durably acknowledged before ACTIVE.'],['Restart','Unfinished session found: arena quarantined before starts become available.'],['Recover','Replay the validated baseline under an exclusive lease.'],['Verify','Full supported state matches; commit completion and release the gate.']]},
+      {name:'Damaged baseline',steps:[['Restart','An unfinished arena manifest is discovered.'],['Quarantine','Baseline integrity check fails. Keep the original bytes and block all starts.'],['Inspect','Staff sees the failed record and repair reason; no automatic unlock or replacement world.']]},
+      {name:'Storage unavailable',steps:[['Prepare','Capture begins while the arena remains unavailable.'],['Blocked','Durable baseline commit fails. The event never becomes ACTIVE.']]}
+    ]},
+    player: { boundary:'Old inventories may contain items already spent or transferred. Applying history is a separate staff reconciliation action; ordinary pending restoration remains success-aware.', scenarios:[
+      {name:'Inspect recovery history',steps:[['Capture','Save immutable capture version and active pointer before temporary event state.'],['Restore','Normal successful restoration resolves the active pointer.'],['History','Staff inspects five example resolved versions; pending records are never pruned.']]},
+      {name:'Staff application proposal',steps:[['Inspect','Compare selected archive version with current player state.'],['Confirm','Bind version, current-state generation, operator and reason; recheck permissions.'],['Preserve','Durably capture current state as an undo record under a player lease.'],['Apply','Teleport and apply the reconciled version; persist the completed result.']]},
+      {name:'Crash during application',steps:[['Apply','Application begins after current-state preservation.'],['Uncertain','Process stops before the applied result is durably acknowledged.'],['Reconcile','Block automatic replay and concurrent recovery; staff reconciles the outcome.']]}
+    ]},
+    preflight: { boundary:'Checks never replace blocks, relocate spawns or create worlds. A cached green view never bypasses final start guards.', scenarios:[
+      {name:'Valid Runner fixture',steps:[['Structure','World, region, four spawns, spectator point and floor area exist.'],['Inspect','Bounded checks confirm passable player space and floor-region containment.'],['Ready','Mandatory checks complete and recovery state is clear.']]},
+      {name:'Bed mismatch',steps:[['Structure','Map has a team bed location.'],['Blocked','Actual bed parts or team association do not match; show coordinates and setup repair guidance.']]},
+      {name:'Unloaded region',steps:[['Inspect','Required world-state check is not yet available.'],['Unknown','Show UNKNOWN or CHECKING within the chunk budget; do not call the arena ready.']]}
+    ]},
+    build: { boundary:'Private and opt-in first. Proposed pacing is 30 seconds memory, 90 seconds build, five rounds; live pacing and tie prizes remain undecided.', scenarios:[
+      {name:'One proposed round',steps:[['Preflight','Equal isolated plots, allowed template, durable arena and player captures confirmed.'],['Memory','All players see the same relative 12-block template with text/time cues.'],['Build','Players rebuild inside their own plots using event-only materials.'],['Score','Example: 10 exact matches minus 2 extra blocks = 8 / 12 (66.7%). Wrong orientation does not match.'],['Reset','Restore plots through shared recovery, then advance with a new round generation.']]},
+      {name:'Extra blocks and ties',steps:[['Score','Example A: 10 matches and 2 extras. Example B: 8 matches and no extras.'],['Tie','Both receive numerator 8 / 12 and share rank; no speed bonus.']]},
+      {name:'Disconnect and late callback',steps:[['Leave','Departing player forfeits this round and keeps a pending success-aware restore.'],['Fence','Old round work cannot score or mutate the next round.']]}
+    ]},
+    season: { boundary:'Example milestones are proposed. Currency and guild XP remain unchanged; cosmetic catalogue and eligibility thresholds are not configured.', scenarios:[
+      {name:'Eligible public completion',steps:[['Qualify','Completed public session belongs to an explicit season and meets the future eligibility policy.'],['Credit','Persist unique season/session/player/credit-type key. Example progress: 2 of 3 completed public events.'],['Unlock','A third eligible completion may unlock an agreed cosmetic requirement; no external grant is configured here.']]},
+      {name:'Duplicate or private outcome',steps:[['Receive','Duplicate completion arrives, or the session is private, TEST-only or cancelled.'],['Excluded','Duplicate key receives no second credit; excluded sessions receive no season progress.']]},
+      {name:'Uncertain external grant',steps:[['Grant','Future cosmetic provider receives an approved grant identity.'],['Uncertain','Provider outcome cannot be confirmed after an interruption.'],['Reconcile','Retain the grant record; no blind retry or duplicate currency payout.']]}
+    ]}
+  };
+  let index = 0;
+  function draw() {
+    const design = designs[feature.value];
+    const choice = design.scenarios[Number(scenario.value) || 0];
+    index = Math.max(0, Math.min(index, choice.steps.length - 1));
+    flow.replaceChildren();
+    choice.steps.forEach((step, i) => {
+      const item = document.createElement('li');
+      item.textContent = step[0];
+      if (i === index) item.setAttribute('aria-current', 'step');
+      flow.appendChild(item);
+    });
+    heading.textContent = choice.steps[index][0];
+    result.textContent = choice.steps[index][1];
+    boundary.textContent = design.boundary;
+    back.disabled = index === 0;
+    next.disabled = index === choice.steps.length - 1;
+  }
+  function selectFeature() {
+    scenario.replaceChildren();
+    designs[feature.value].scenarios.forEach((choice, i) => {
+      const option = document.createElement('option'); option.value = String(i); option.textContent = choice.name; scenario.appendChild(option);
+    });
+    index = 0; draw();
+  }
+  feature.addEventListener('change', selectFeature);
+  scenario.addEventListener('change', () => { index = 0; draw(); });
+  back.addEventListener('click', () => { index--; draw(); });
+  next.addEventListener('click', () => { index++; draw(); });
+  selectFeature();
+})();
+</script>
