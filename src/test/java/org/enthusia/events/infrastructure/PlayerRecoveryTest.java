@@ -6,7 +6,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.enthusia.events.EnthusiaEventsPlugin;
 import org.enthusia.events.event.*;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.*;
 import java.io.IOException;
@@ -15,6 +17,7 @@ import java.util.logging.Logger;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 class PlayerRecoveryTest {
+ private static final String SNAPSHOT_SUFFIX = ".snapshot";
  @TempDir Path root;
  org.mockito.MockedStatic<PlayerSnapshot> captures;
  EnthusiaEventsPlugin plugin; Player player; PlayerInventory inventory; World world; CommandSender actor;
@@ -52,7 +55,7 @@ class PlayerRecoveryTest {
   var service=spy(new PlayerSnapshotService(plugin));doNothing().when(service).restoreMaxHealth(any(),anyDouble());assertTrue(service.capture(player));
   assertTrue(service.restoreSynchronously(player,false));
   UUID archived;
-  try(var files=Files.list(root.resolve("recovery/players").resolve(player.getUniqueId().toString()))) {archived=UUID.fromString(files.filter(f->f.toString().endsWith(".snapshot")).findFirst().orElseThrow().getFileName().toString().replace(".snapshot",""));}
+  try(var files=Files.list(root.resolve("recovery/players").resolve(player.getUniqueId().toString()))) {archived=UUID.fromString(files.filter(f->f.toString().endsWith(SNAPSHOT_SUFFIX)).findFirst().orElseThrow().getFileName().toString().replace(SNAPSHOT_SUFFIX,""));}
   var preview=service.previewHistorical(actor,player,archived,"spent items accounted for",false);
   UUID token=UUID.fromString(preview.getLast().substring(preview.getLast().lastIndexOf(' ')+1));
   assertTrue(service.confirmHistorical(actor,token).contains("undo capture="));assertFalse(service.recoveryBlocked(player.getUniqueId()));
@@ -60,7 +63,7 @@ class PlayerRecoveryTest {
  }
  @Test void changedCurrentStateAndRevokedPermissionRejectConfirmation() throws Exception {
   var service=spy(new PlayerSnapshotService(plugin));doNothing().when(service).restoreMaxHealth(any(),anyDouble());assertTrue(service.capture(player));assertTrue(service.restoreSynchronously(player,false));
-  UUID archived;try(var files=Files.list(root.resolve("recovery/players").resolve(player.getUniqueId().toString()))) {archived=UUID.fromString(files.filter(f->f.toString().endsWith(".snapshot")).findFirst().orElseThrow().getFileName().toString().replace(".snapshot",""));}
+  UUID archived;try(var files=Files.list(root.resolve("recovery/players").resolve(player.getUniqueId().toString()))) {archived=UUID.fromString(files.filter(f->f.toString().endsWith(SNAPSHOT_SUFFIX)).findFirst().orElseThrow().getFileName().toString().replace(SNAPSHOT_SUFFIX,""));}
   var preview=service.previewHistorical(actor,player,archived,"reviewed",false);UUID token=UUID.fromString(preview.getLast().substring(preview.getLast().lastIndexOf(' ')+1));
   when(actor.hasPermission("enthusia.events.recovery.apply")).thenReturn(false);assertThrows(IllegalArgumentException.class,()->service.confirmHistorical(actor,token));
   when(actor.hasPermission("enthusia.events.recovery.apply")).thenReturn(true);

@@ -4,7 +4,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.enthusia.events.EnthusiaEventsPlugin;
 import org.enthusia.events.event.*;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.*;
 import java.time.*;
@@ -13,6 +14,7 @@ import java.util.logging.Logger;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 class SeasonProgressTest {
+ private static final String COSMETIC_ID = "champion";
  @TempDir Path root;
  EnthusiaEventsPlugin plugin; YamlConfiguration config; MutableClock clock; UUID id; Player player; World world;
  @BeforeEach void setup() {
@@ -29,7 +31,7 @@ class SeasonProgressTest {
  @Test void completionIdempotencyRestartPersonalBestAndCosmeticOwnership() throws Exception {
   var service=new SeasonProgress(plugin,clock);var session=session(false);service.pin(session,List.of(id));participate(service,session);service.complete(session,Set.of(id));
   assertTrue(String.join(";",service.view(id)).contains("Completed eligible events: 1; wins: 1"));assertTrue(String.join(";",service.view(id)).contains("PARKOUR/unconfigured: 2000ms"));
-  service.complete(session,Set.of(id));assertTrue(service.equip(id,"champion").contains("champion"));
+  service.complete(session,Set.of(id));assertTrue(service.equip(id,COSMETIC_ID).contains(COSMETIC_ID));
   var restarted=new SeasonProgress(plugin,clock);assertTrue(String.join(";",restarted.view(id)).contains("Selected cosmetic: champion"));
   restarted.pin(session,List.of(id));participate(restarted,session);restarted.complete(session,Set.of(id));
   assertTrue(String.join(";",restarted.view(id)).contains("Completed eligible events: 1; wins: 1"));
@@ -38,7 +40,7 @@ class SeasonProgressTest {
   var service=new SeasonProgress(plugin,clock);var privateSession=session(true);service.pin(privateSession,List.of(id));participate(service,privateSession);service.complete(privateSession,Set.of(id));
   var publicSession=session(false);service.pin(publicSession,List.of(id));service.cancel(publicSession.id());participate(service,publicSession);service.complete(publicSession,Set.of(id));
   var idle=session(false);service.pin(idle,List.of(id));when(player.isOnline()).thenReturn(false);participate(service,idle);service.complete(idle,Set.of(id));
-  assertThrows(IllegalArgumentException.class,()->service.equip(id,"champion"));assertTrue(String.join(";",service.view(id)).contains("Completed eligible events: 0"));
+  assertThrows(IllegalArgumentException.class,()->service.equip(id,COSMETIC_ID));assertTrue(String.join(";",service.view(id)).contains("Completed eligible events: 0"));
   config.set("seasons.environment","test");assertTrue(new SeasonProgress(plugin,clock).view(id).getFirst().contains("excluded"));
  }
  @Test void graceRetainsOriginalSeasonAndChangedPolicyOrCorruptLedgerFreezes() throws Exception {
@@ -54,7 +56,7 @@ class SeasonProgressTest {
   var service=new SeasonProgress(plugin,clock);var idle=session(false);service.pin(idle,List.of(id));
   participate(service,idle);service.complete(idle,Set.of(id));
   assertTrue(String.join(";",service.view(id)).contains("Completed eligible events: 0"));
-  assertThrows(IllegalArgumentException.class,()->service.equip(id,"champion"));
+  assertThrows(IllegalArgumentException.class,()->service.equip(id,COSMETIC_ID));
  }
  static final class MutableClock extends Clock {
   long now=Instant.parse("2026-01-01T00:00:00Z").toEpochMilli();void add(long value){now+=value;}

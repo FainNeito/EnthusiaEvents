@@ -92,6 +92,7 @@ public final class ArenaResetService implements Listener {
         }
     }
 
+    @SuppressWarnings("PMD.NullAssignment") // Retire the cancelled Bukkit task reference.
     private void cancelResetTask() {
         if (resetTask != null) { resetTask.cancel(); resetTask = null; }
     }

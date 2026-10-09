@@ -53,6 +53,7 @@ public final class PlayerSnapshotService {
     private static final String WALK_SPEED_KEY = ".walk-speed";
     private static final int INVENTORY_SIZE = 41;
     private static final int ARMOR_SIZE = 4;
+    private static final long INVALID_CAPTURE_TIME = 0L;
     private static final int LOCATION_PARTS = 6;
     private static final long SNAPSHOT_TTL_MILLIS = Duration.ofDays(7).toMillis();
     private static final int[] RESTORE_RETRY_DELAYS_TICKS = {20, 40, 80, 120};
@@ -573,7 +574,7 @@ public final class PlayerSnapshotService {
                 String path = PLAYER_PREFIX + key;
                 long timestamp = config.getLong(path + CAPTURED_AT_KEY, 0L);
                 boolean entryRestored = config.getBoolean(path + ".restored", false);
-                if (timestamp <= 0L) { unreadableStorage = true; continue; }
+                if (timestamp <= INVALID_CAPTURE_TIME) { unreadableStorage = true; continue; }
                 if (entryRestored && now - timestamp > SNAPSHOT_TTL_MILLIS) {
                     changed = true;
                     continue;

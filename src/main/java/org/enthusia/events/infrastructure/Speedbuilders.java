@@ -189,31 +189,51 @@ public final class Speedbuilders implements Listener {
             if (token != generation) return;
             if (!current()) { stop(); return; }
             players(p -> p.sendActionBar(net.kyori.adventure.text.Component.text("Round " + round + " · " + phase + " · " + remaining[0] + "s")));
-            if (remaining[0]-- <= 0) { task.cancel(); task = null; next.run(); }
+            boolean elapsed = remaining[0] <= 0;
+            remaining[0]--;
+            if (elapsed) { task.cancel(); task = null; next.run(); }
         }, 0L, 20L);
     }
-    @SuppressWarnings("PMD.NullAssignment") // Null retires task/session references after cancellation.
     private void mutatePlots(boolean show, Runnable finished) {
         long token = ++generation;
         List<Map.Entry<CuboidRegion, Offset>> cells = new ArrayList<>();
         for (CuboidRegion plot : plots.values()) for (Offset offset : offsets(plot)) cells.add(Map.entry(plot, offset));
-        int[] cursor = {0};
-        task = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
-            if (token != generation) return;
-            if (!current()) { stop(); return; }
-            try {
-                World world = plugin.getServer().getWorld(tracked.selectedMap().worldName());
-                for (int n = 0; n < 128 && cursor[0] < cells.size(); n++, cursor[0]++) {
-                    var entry = cells.get(cursor[0]); var offset = entry.getValue(); var plot = entry.getKey();
-                    int x = (int) plot.minX() + offset.x(), y = (int) plot.minY() + offset.y(), z = (int) plot.minZ() + offset.z();
-                    if (world == null || !world.isChunkLoaded(x >> 4, z >> 4)) throw new IllegalStateException("Plot chunk unavailable");
-                    var block = world.getBlockAt(x, y, z);
-                    if (block.getState() instanceof TileState) throw new IllegalStateException("Unexpected plot tile");
-                    block.setBlockData(plugin.getServer().createBlockData(show ? template.getOrDefault(offset, AIR_BLOCK_DATA) : AIR_BLOCK_DATA), false);
-                }
-                if (cursor[0] == cells.size()) { task.cancel(); task = null; finished.run(); }
-            } catch (RuntimeException failure) { manager.stop("Speedbuilders plot update failed; arena recovery retained"); stop(); }
-        }, 1L, 1L);
+        PlotMutation mutation = new PlotMutation(show, finished, token, cells);
+        task = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> mutateTick(mutation), 1L, 1L);
+    }
+    @SuppressWarnings("PMD.NullAssignment") // Completed plot work retires its task before starting the next phase.
+    private void mutateTick(PlotMutation mutation) {
+        if (mutation.token != generation) return;
+        if (!current()) { stop(); return; }
+        try {
+            updatePlotCells(mutation);
+            if (mutation.cursor == mutation.cells.size()) { task.cancel(); task = null; mutation.finished.run(); }
+        } catch (RuntimeException failure) { manager.stop("Speedbuilders plot update failed; arena recovery retained"); stop(); }
+    }
+    private void updatePlotCells(PlotMutation mutation) {
+        World world = plugin.getServer().getWorld(tracked.selectedMap().worldName());
+        if (world == null) throw new IllegalStateException("Plot chunk unavailable");
+        for (int n = 0; n < 128 && mutation.cursor < mutation.cells.size(); n++, mutation.cursor++) {
+            var entry = mutation.cells.get(mutation.cursor);
+            updatePlotCell(world, entry.getKey(), entry.getValue(), mutation.show);
+        }
+    }
+    private void updatePlotCell(World world, CuboidRegion plot, Offset offset, boolean show) {
+        int x = (int) plot.minX() + offset.x(), y = (int) plot.minY() + offset.y(), z = (int) plot.minZ() + offset.z();
+        if (!world.isChunkLoaded(x >> 4, z >> 4)) throw new IllegalStateException("Plot chunk unavailable");
+        var block = world.getBlockAt(x, y, z);
+        if (block.getState() instanceof TileState) throw new IllegalStateException("Unexpected plot tile");
+        block.setBlockData(plugin.getServer().createBlockData(show ? template.getOrDefault(offset, AIR_BLOCK_DATA) : AIR_BLOCK_DATA), false);
+    }
+    private static final class PlotMutation {
+        private final boolean show;
+        private final Runnable finished;
+        private final long token;
+        private final List<Map.Entry<CuboidRegion, Offset>> cells;
+        private int cursor;
+        private PlotMutation(boolean show, Runnable finished, long token, List<Map.Entry<CuboidRegion, Offset>> cells) {
+            this.show = show; this.finished = finished; this.token = token; this.cells = cells;
+        }
     }
     private Map<Offset, String> read(CuboidRegion region, World world) {
         if (world == null) throw new IllegalStateException("Original world missing");

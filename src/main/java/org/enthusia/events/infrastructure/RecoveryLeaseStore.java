@@ -7,6 +7,7 @@ import java.util.UUID;
 
 /** Durable application fence. Unknown/corrupt states fail closed; no automatic inventory replay. */
 public final class RecoveryLeaseStore {
+    private static final int MAX_LEASE_BYTES = 4096;
     private static final int LEASE_FIELDS = 9;
     private final Path root;
     private final java.util.concurrent.ConcurrentHashMap<UUID, Boolean> isolation = new java.util.concurrent.ConcurrentHashMap<>();
@@ -61,7 +62,7 @@ public final class RecoveryLeaseStore {
         AtomicFiles.replace(file, (PlayerSnapshotArchive.digest(payload.getBytes(StandardCharsets.UTF_8)) + "\n" + payload).getBytes(StandardCharsets.UTF_8));
     }
     private static String[] read(Path file) throws IOException {
-        if (Files.size(file) > 4096) throw new IOException("Oversized recovery lease");
+        if (Files.size(file) > MAX_LEASE_BYTES) throw new IOException("Oversized recovery lease");
         String envelope = Files.readString(file);
         int separator = envelope.indexOf('\n');
         if (separator < 0) throw new IOException("Missing recovery checksum");
