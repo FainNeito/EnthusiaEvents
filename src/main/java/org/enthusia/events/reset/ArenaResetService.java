@@ -45,7 +45,8 @@ public final class ArenaResetService implements Listener {
 
     private String lastFailure = "";
 
-    public boolean isResetting() { return resetTask != null || !pendingRestore.isEmpty(); }
+    public boolean isResetting() { return resetTask != null || !pendingRestore.isEmpty()
+            || (plugin.arenaRecovery() != null && plugin.arenaRecovery().blocked()); }
     public int pendingBlocks() { return pendingRestore.size(); }
     public String failure() { return lastFailure.isEmpty() ? null : lastFailure; }
 
@@ -56,7 +57,10 @@ public final class ArenaResetService implements Listener {
             pendingRestore.addAll(originalStates.values().stream().toList().reversed());
             originalStates.clear();
         }
-        if (pendingRestore.isEmpty()) return;
+        if (pendingRestore.isEmpty()) {
+            if (plugin.arenaRecovery() != null) plugin.arenaRecovery().reset();
+            return;
+        }
         lastFailure = "";
         int synchronousLimit = Math.max(0, plugin.getConfig().getInt("reset.max-blocks-per-session", 50_000));
         if (pendingRestore.size() <= synchronousLimit) {
@@ -83,6 +87,7 @@ public final class ArenaResetService implements Listener {
         }
         if (pendingRestore.isEmpty()) {
             cancelResetTask();
+            if (plugin.arenaRecovery() != null && plugin.isEnabled()) plugin.arenaRecovery().reset();
             plugin.recordSessionEvidence(eventManager.session(), "arena-reset-complete", null);
         }
     }
@@ -94,6 +99,8 @@ public final class ArenaResetService implements Listener {
     /** Finish before Bukkit cancels tasks. Failed states remain retained in memory;
      * this is not a crash-recovery journal. */
     public void finishPendingSynchronously() {
+        // Durable work remains on disk for explicit restart reconciliation; never discard it on shutdown.
+        if (plugin.arenaRecovery() != null) plugin.arenaRecovery().shutdown();
         cancelResetTask();
         pendingRestore.addAll(originalStates.values().stream().toList().reversed());
         originalStates.clear();

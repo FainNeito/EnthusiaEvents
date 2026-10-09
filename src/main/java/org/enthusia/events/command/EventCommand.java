@@ -50,6 +50,7 @@ public final class EventCommand implements CommandExecutor, TabCompleter {
             case "leave" -> leave(player);
             case "start" -> start(player, args);
             case "stats" -> openStats(player);
+            case "season" -> { plugin.seasonProgress().view(player.getUniqueId()).forEach(player::sendMessage); yield true; }
             case "browse" -> { plugin.eventTools().browse(player); yield true; }
             case "schedule" -> { plugin.eventTools().schedule(player); yield true; }
             case "next", "time", "timer" -> sendNextEvent(player);

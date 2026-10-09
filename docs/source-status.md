@@ -1,5 +1,7 @@
 # Source status and deferred acceptance
 
+New roadmap implementation on this branch is uncompiled and untested under the active testing hold. The evidence below describes the earlier PR #15 slice only; see [roadmap-work.md](roadmap-work.md) for the new draft and its open gates.
+
 This matrix reconciles the prior playtest audit, authoritative main and PR #15. Original private Discord evidence remains task-local. Source protections and automated regression evidence are distinct from deployment and player acceptance. Testing is currently on hold.
 
 | Concern or recommendation | Source status | Remaining boundary |

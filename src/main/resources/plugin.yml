@@ -9,10 +9,10 @@ softdepend: [Vault, PlaceholderAPI, floodgate, Geyser-Spigot, EnthusiaTeleport, 
 commands:
   event:
     description: Event commands.
-    usage: /event <join|leave|spectate|vote|start|stats|next|time|timer|browse|schedule|admin>
+    usage: /event <join|leave|spectate|vote|start|stats|next|time|timer|browse|schedule|season|admin>
   ee:
     description: Admin event commands.
-    usage: /ee <autostart|disable|enable|enabled|disabled|status|private|invite|forcestart|simulatevote|advance|forcestop|eventtp|stop|restore|stuckcheck|emergencyrestore|remove|reload|retryrestores|kit|resetconfigs|resetloot|map|setup|readiness|loot|trace|resetarena>
+    usage: /ee <autostart|disable|enable|enabled|disabled|status|private|invite|forcestart|simulatevote|advance|forcestop|eventtp|stop|restore|stuckcheck|emergencyrestore|remove|reload|retryrestores|kit|resetconfigs|resetloot|map|setup|readiness|loot|trace|resetarena|preflight|recovery>
     aliases: [events]
 
 permissions:
@@ -23,4 +23,8 @@ permissions:
   enthusia.events.start.free:
     default: op
   enthusia.events.admin:
+    default: op
+  enthusia.events.recovery.inspect:
+    default: op
+  enthusia.events.recovery.retry:
     default: op

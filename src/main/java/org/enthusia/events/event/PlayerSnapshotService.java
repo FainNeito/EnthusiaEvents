@@ -14,9 +14,9 @@ import org.enthusia.events.util.TeleportService;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
+import java.nio.charset.StandardCharsets;
+import org.enthusia.events.infrastructure.AtomicFiles;
+import org.enthusia.events.infrastructure.PlayerSnapshotArchive;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -40,26 +40,58 @@ public final class PlayerSnapshotService {
     private final Map<UUID, Long> capturedAt = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> restored = new ConcurrentHashMap<>();
     private final Map<UUID, Long> warnedOldUnrestored = new ConcurrentHashMap<>();
+    private final PlayerSnapshotArchive archive;
+    private final Map<UUID, UUID> archiveIds = new ConcurrentHashMap<>();
+    private boolean unreadableStorage;
 
     public PlayerSnapshotService(EnthusiaEventsPlugin plugin) {
         this.plugin = plugin;
         this.file = new File(plugin.getDataFolder(), "snapshots.yml");
+        this.archive = new PlayerSnapshotArchive(plugin.getDataFolder().toPath().resolve("recovery/players"));
         load();
     }
 
     public boolean capture(Player player) {
         purgeExpiredRestored();
+        if (unreadableStorage) return false;
         if (hasUnrestoredSnapshot(player.getUniqueId())) {
             plugin.getLogger().warning("Refusing to overwrite unrestored event snapshot for " + player.getName()
                     + ". Restore or discard the existing snapshot first.");
             return false;
         }
-        snapshots.put(player.getUniqueId(), PlayerSnapshot.capture(player));
-        capturedAt.put(player.getUniqueId(), System.currentTimeMillis());
-        restored.put(player.getUniqueId(), false);
-        save();
-        return true;
+        UUID uuid = player.getUniqueId();
+        PlayerSnapshot previous = snapshots.get(uuid);
+        Long previousTime = capturedAt.get(uuid);
+        Boolean previousRestored = restored.get(uuid);
+        UUID previousId = archiveIds.get(uuid);
+        snapshots.put(uuid, PlayerSnapshot.capture(player));
+        capturedAt.put(uuid, System.currentTimeMillis());
+        restored.put(uuid, false);
+        UUID captureId = UUID.randomUUID();
+        try {
+            if (plugin.getConfig().getBoolean("recovery.player-history.enabled", false)) {
+                archiveIds.put(uuid, captureId);
+                YamlConfiguration record = new YamlConfiguration();
+                record.set("archive-schema", 1);
+                record.set("session-id", plugin.currentSessionId() == null ? "manual" : plugin.currentSessionId().toString());
+                writeSnapshot(record, uuid, snapshots.get(uuid));
+                archive.capture(uuid, captureId, capturedAt.get(uuid), record.saveToString());
+            } else archiveIds.remove(uuid);
+            if (persist()) return true;
+        } catch (IOException | RuntimeException failure) {
+            plugin.getLogger().log(Level.SEVERE, "Could not archive player snapshot; capture rejected for " + uuid, failure);
+        }
+        restoreEntry(snapshots, uuid, previous);
+        restoreEntry(capturedAt, uuid, previousTime);
+        restoreEntry(restored, uuid, previousRestored);
+        restoreEntry(archiveIds, uuid, previousId);
+        return false;
     }
+
+    private static <T> void restoreEntry(Map<UUID, T> map, UUID uuid, T value) {
+        if (value == null) map.remove(uuid); else map.put(uuid, value);
+    }
+    public List<String> history(UUID player) throws IOException { return archive.history(player); }
 
     public boolean hasSnapshot(UUID uuid) {
         purgeExpiredRestored();
@@ -154,6 +186,7 @@ public final class PlayerSnapshotService {
     }
 
     private void markRestored(UUID uuid, boolean consume) {
+        UUID captureId = archiveIds.get(uuid);
         if (consume) {
             snapshots.remove(uuid);
             capturedAt.remove(uuid);
@@ -161,7 +194,10 @@ public final class PlayerSnapshotService {
         } else {
             restored.put(uuid, true);
         }
-        save();
+        if (persist() && captureId != null) {
+            try { archive.resolve(uuid, captureId); }
+            catch (IOException failure) { plugin.getLogger().log(Level.WARNING, "Snapshot history resolution remains pending for " + uuid, failure); }
+        }
     }
 
     private boolean applySnapshot(Player player, PlayerSnapshot snapshot) {
@@ -209,6 +245,7 @@ public final class PlayerSnapshotService {
     }
 
     public void discard(UUID uuid) {
+        archiveIds.remove(uuid);
         snapshots.remove(uuid);
         capturedAt.remove(uuid);
         restored.remove(uuid);
@@ -216,56 +253,68 @@ public final class PlayerSnapshotService {
     }
 
     public void save() {
+        persist();
+    }
+
+    private boolean persist() {
+        if (unreadableStorage) return false;
         try {
             if (!plugin.getDataFolder().exists() && !plugin.getDataFolder().mkdirs()) {
                 plugin.getLogger().warning("Could not create plugin data folder for event snapshots.");
-                return;
+                return false;
             }
             YamlConfiguration config = new YamlConfiguration();
             for (Map.Entry<UUID, PlayerSnapshot> entry : snapshots.entrySet()) {
                 UUID uuid = entry.getKey();
                 PlayerSnapshot snapshot = entry.getValue();
-                String path = "players." + uuid;
-                config.set(path + ".captured-at", capturedAt.getOrDefault(uuid, System.currentTimeMillis()));
-                config.set(path + ".restored", restored.getOrDefault(uuid, false));
-                config.set(path + ".location", LocationCodec.encode(snapshot.location()));
-                config.set(path + ".inventory", nullableList(snapshot.inventory()));
-                config.set(path + ".armor", nullableList(snapshot.armor()));
-                config.set(path + ".offhand", snapshot.offhand());
-                config.set(path + ".max-health", snapshot.maxHealth());
-                config.set(path + ".health", snapshot.health());
-                config.set(path + ".food-level", snapshot.foodLevel());
-                config.set(path + ".saturation", snapshot.saturation());
-                config.set(path + ".exhaustion", snapshot.exhaustion());
-                config.set(path + ".total-experience", snapshot.totalExperience());
-                config.set(path + ".experience-level", snapshot.experienceLevel());
-                config.set(path + ".experience-progress", snapshot.experienceProgress());
-                config.set(path + ".game-mode", snapshot.gameMode().name());
-                config.set(path + ".potion-effects", new ArrayList<>(snapshot.potionEffects()));
-                config.set(path + ".allow-flight", snapshot.allowFlight());
-                config.set(path + ".flying", snapshot.flying());
-                config.set(path + ".walk-speed", snapshot.walkSpeed());
-                config.set(path + ".fly-speed", snapshot.flySpeed());
+                writeSnapshot(config, uuid, snapshot);
             }
-
-            File tempFile = new File(file.getParentFile(), file.getName() + ".tmp");
-            config.save(tempFile);
-            try {
-                Files.move(tempFile.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException ex) {
-                Files.move(tempFile.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            }
-        } catch (IOException ex) {
-            plugin.getLogger().log(Level.SEVERE, "Could not save event player snapshots.", ex);
+            AtomicFiles.replace(file.toPath(), config.saveToString().getBytes(StandardCharsets.UTF_8));
+            return true;
+        } catch (IOException | RuntimeException ex) {
+            plugin.getLogger().log(Level.SEVERE, "Could not save event player snapshots; capture not acknowledged.", ex);
+            return false;
         }
+    }
+
+    private void writeSnapshot(YamlConfiguration config, UUID uuid, PlayerSnapshot snapshot) {
+        String path = "players." + uuid;
+        config.set(path + ".capture-id", archiveIds.containsKey(uuid) ? archiveIds.get(uuid).toString() : null);
+        config.set(path + ".captured-at", capturedAt.getOrDefault(uuid, System.currentTimeMillis()));
+        config.set(path + ".restored", restored.getOrDefault(uuid, false));
+        config.set(path + ".location", LocationCodec.encode(snapshot.location()));
+        config.set(path + ".inventory", nullableList(snapshot.inventory()));
+        config.set(path + ".armor", nullableList(snapshot.armor()));
+        config.set(path + ".offhand", snapshot.offhand());
+        config.set(path + ".max-health", snapshot.maxHealth());
+        config.set(path + ".health", snapshot.health());
+        config.set(path + ".food-level", snapshot.foodLevel());
+        config.set(path + ".saturation", snapshot.saturation());
+        config.set(path + ".exhaustion", snapshot.exhaustion());
+        config.set(path + ".total-experience", snapshot.totalExperience());
+        config.set(path + ".experience-level", snapshot.experienceLevel());
+        config.set(path + ".experience-progress", snapshot.experienceProgress());
+        config.set(path + ".game-mode", snapshot.gameMode().name());
+        config.set(path + ".potion-effects", new ArrayList<>(snapshot.potionEffects()));
+        config.set(path + ".allow-flight", snapshot.allowFlight());
+        config.set(path + ".flying", snapshot.flying());
+        config.set(path + ".walk-speed", snapshot.walkSpeed());
+        config.set(path + ".fly-speed", snapshot.flySpeed());
     }
 
     private void load() {
         if (!file.exists()) {
             return;
         }
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        YamlConfiguration config = new YamlConfiguration();
+        try { config.load(file); }
+        catch (IOException | org.bukkit.configuration.InvalidConfigurationException failure) {
+            unreadableStorage = true;
+            plugin.getLogger().log(Level.SEVERE, "Snapshot storage unreadable; preserved original file and blocked captures.", failure);
+            return;
+        }
         if (!config.isConfigurationSection("players")) {
+            if (!config.getKeys(false).isEmpty()) unreadableStorage = true;
             return;
         }
         long now = System.currentTimeMillis();
@@ -276,7 +325,8 @@ public final class PlayerSnapshotService {
                 String path = "players." + key;
                 long timestamp = config.getLong(path + ".captured-at", 0L);
                 boolean entryRestored = config.getBoolean(path + ".restored", false);
-                if (timestamp <= 0L || (entryRestored && now - timestamp > SNAPSHOT_TTL_MILLIS)) {
+                if (timestamp <= 0L) { unreadableStorage = true; continue; }
+                if (entryRestored && now - timestamp > SNAPSHOT_TTL_MILLIS) {
                     changed = true;
                     continue;
                 }
@@ -285,6 +335,7 @@ public final class PlayerSnapshotService {
                 }
                 Location location = LocationCodec.decode(config.getString(path + ".location", ""));
                 if (location == null) {
+                    unreadableStorage = true;
                     changed = true;
                     continue;
                 }
@@ -313,7 +364,10 @@ public final class PlayerSnapshotService {
                 snapshots.put(uuid, snapshot);
                 capturedAt.put(uuid, timestamp);
                 restored.put(uuid, entryRestored);
+                String id = config.getString(path + ".capture-id");
+                if (id != null) archiveIds.put(uuid, UUID.fromString(id));
             } catch (RuntimeException ex) {
+                unreadableStorage = true;
                 changed = true;
                 plugin.getLogger().log(Level.WARNING, "Skipped corrupt event snapshot entry: " + key, ex);
             }

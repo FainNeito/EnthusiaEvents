@@ -168,6 +168,7 @@ public final class EventManager {
     }
 
     public boolean startManualVote(CommandSender initiator, EventDefinition forced, boolean discountedRandom) {
+        if (forced != null && forced.type() == EventType.SPEEDBUILDERS) return false;
         if (isArenaResetting()) return false;
         if (session != null) {
             return false;
@@ -210,6 +211,8 @@ public final class EventManager {
     }
 
     public boolean startPrivateEvent(CommandSender initiator, EventType type, List<Player> invitedPlayers) {
+        if (type == EventType.SPEEDBUILDERS && (!plugin.getConfig().getBoolean("speedbuilders.enabled", false)
+                || plugin.arenaRecovery() == null || !plugin.arenaRecovery().enabled(type))) return false;
         if (isArenaResetting()) return false;
         if (session != null) {
             return false;
@@ -311,6 +314,7 @@ public final class EventManager {
     }
 
     public boolean startForcedEvent(EventType type) {
+        if (type == EventType.SPEEDBUILDERS) return false;
         if (isArenaResetting()) return false;
         if (session != null) {
             return false;
@@ -435,7 +439,7 @@ public final class EventManager {
             return true;
         }
         if (!snapshotService.capture(player)) {
-            plugin.messages().send(player, "event-join-blocked-unrestored");
+            plugin.messages().send(player, "event-snapshot-capture-failed");
             return true;
         }
         healForEvent(player);
@@ -482,7 +486,7 @@ public final class EventManager {
                 return true;
             }
             if (!snapshotService.capture(player)) {
-                plugin.messages().send(player, "event-join-blocked-unrestored");
+                plugin.messages().send(player, "event-snapshot-capture-failed");
                 return true;
             }
         }
@@ -876,7 +880,7 @@ public final class EventManager {
             podiumService.show(rankedPlayers);
         }
         if (!rankedPlayers.isEmpty()) {
-            Set<UUID> winners = session.definition().type() == EventType.CAPTURE_PLAYERS
+            Set<UUID> winners = session.definition().type() == EventType.CAPTURE_PLAYERS || session.definition().type() == EventType.SPEEDBUILDERS
                     ? Set.copyOf(rankedPlayers)
                     : Set.of(rankedPlayers.getFirst());
             for (UUID winner : winners) {
@@ -918,6 +922,8 @@ public final class EventManager {
     }
 
     public void stop(String reason) {
+        if (plugin.speedbuilders() != null) plugin.speedbuilders().stop();
+        if (session != null && plugin.seasonProgress() != null) plugin.seasonProgress().cancel(session.id());
         cancelTask();
         cancelActiveTask();
         cancelPreStartTask();
@@ -1216,6 +1222,33 @@ public final class EventManager {
             cancelForNotEnoughPlayers();
             return false;
         }
+        if (plugin.arenaPreflight() != null && (plugin.getConfig().getBoolean("preflight.enforce-start", false)
+                || session.definition().type() == EventType.SPEEDBUILDERS
+                || plugin.arenaRecovery().enabled(session.definition().type()))) {
+            var findings = session.selectedMap() == null ? List.<org.enthusia.events.domain.PreflightFinding>of()
+                    : plugin.arenaPreflight().inspect(session.selectedMap());
+            if (session.selectedMap() == null || !org.enthusia.events.infrastructure.ArenaPreflight.ready(findings)) {
+                messageEventPlayers("Arena preflight blocked activation. Staff: /ee preflight " + session.definition().type() + " <map>");
+                stop("Arena preflight failed"); return false;
+            }
+        }
+        if (session.definition().type() == EventType.SPEEDBUILDERS && plugin.speedbuilders() != null) {
+            var errors = plugin.speedbuilders().validate(session);
+            if (!errors.isEmpty()) { messageEventPlayers(String.join("; ", errors)); stop("Speedbuilders setup incomplete"); return false; }
+        }
+        if (plugin.arenaRecovery() != null && plugin.arenaRecovery().enabled(session.definition().type()) && !plugin.arenaRecovery().prepared(session)) {
+            if (plugin.arenaRecovery().blocked()) return false;
+            cancelTask(); cancelPreStartTask();
+            session.phase(EventPhase.PRESTART);
+            EventSession preparing = session;
+            plugin.arenaRecovery().prepare(preparing, () -> {
+                if (session == preparing && preparing.phase() == EventPhase.PRESTART) beginActivePhase();
+                else plugin.arenaRecovery().reset();
+            }, failure -> {
+                if (session == preparing) { messageEventPlayers(failure); stop("Arena baseline not committed"); }
+            });
+            return true;
+        }
         cancelTask();
         cancelPreStartTask();
         resetBracketState();
@@ -1329,6 +1362,15 @@ public final class EventManager {
         if (session == null) {
             return;
         }
+        boolean enforce = plugin.getConfig().getBoolean("preflight.enforce-start", false) || session.definition().type() == EventType.SPEEDBUILDERS
+                || (plugin.arenaRecovery() != null && plugin.arenaRecovery().enabled(session.definition().type()));
+        if (enforce && (session.selectedMap() == null || !org.enthusia.events.infrastructure.ArenaPreflight.ready(plugin.arenaPreflight().inspect(session.selectedMap())))) {
+            messageEventPlayers("Arena changed or checks became unavailable during preparation; activation cancelled.");
+            stop("Final arena preflight failed"); return;
+        }
+        if (plugin.arenaRecovery() != null && plugin.arenaRecovery().enabled(session.definition().type()) && !plugin.arenaRecovery().prepared(session)) {
+            stop("Durable arena lease unavailable"); return;
+        }
         cancelPreStartTask();
         Set<UUID> lockedPlayers = Set.copyOf(spawnLocked);
         spawnLocked.clear();
@@ -1340,6 +1382,7 @@ public final class EventManager {
             }
         }
         session.phase(EventPhase.ACTIVE);
+        if (plugin.seasonProgress() != null) plugin.seasonProgress().pin(session, session.participants());
         clearCountdownExperience();
         playGoSound();
         playGlobalEventStartSound();
@@ -1353,6 +1396,9 @@ public final class EventManager {
             statsService.recordParticipation(uuid, session.definition().type());
         }
         messageEventPlayers(plugin.messages().format("event-active-started", Map.of("event", session.definition().displayName())));
+        if (session.definition().type() == EventType.SPEEDBUILDERS && plugin.speedbuilders() != null) {
+            plugin.speedbuilders().start(session); return;
+        }
         scheduleActiveTimer(session.definition().type());
     }
 
@@ -1751,6 +1797,7 @@ public final class EventManager {
     }
 
     private void payWinner(EventSession finished) {
+        if (finished.definition().type() == EventType.SPEEDBUILDERS) return;
         if (finished.finalRankings().isEmpty() || economy == null) {
             return;
         }
@@ -2602,6 +2649,7 @@ public final class EventManager {
     }
 
     private void resetRuntimeServices() {
+        if (plugin.speedbuilders() != null) plugin.speedbuilders().stop();
         gameplayRuntimeReset.run();
         if (arenaResetService != null) {
             arenaResetService.reset();

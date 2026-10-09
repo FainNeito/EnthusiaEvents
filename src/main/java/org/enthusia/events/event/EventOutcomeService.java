@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 public final class EventOutcomeService {
 
     private static final Set<EventType> TEAM_RESULT_TYPES = Set.of(
+            EventType.SPEEDBUILDERS,
             EventType.CAPTURE_THE_FLAG,
             EventType.CAPTURE_PLAYERS,
             EventType.BEDWARS,
@@ -167,6 +168,7 @@ public final class EventOutcomeService {
         }
 
         Set<UUID> winners = intendedWinners(completedType, completedRankings);
+        if (plugin.seasonProgress() != null) plugin.seasonProgress().complete(session, winners);
         for (UUID uuid : activeRoster) {
             OutcomeBaseline baseline = baselines.get(uuid);
             if (baseline == null) {

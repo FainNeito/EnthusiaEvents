@@ -83,6 +83,17 @@ public final class EnthusiaEventsPlugin extends JavaPlugin {
     private RestoreConfirmGui restoreConfirmGui;
     private EventGameplayListener gameplayListener;
     private SetupWizard setupWizard;
+    private org.enthusia.events.infrastructure.ArenaPreflight arenaPreflight;
+    private org.enthusia.events.infrastructure.ArenaRecovery arenaRecovery;
+    private org.enthusia.events.infrastructure.Speedbuilders speedbuilders;
+    private org.enthusia.events.infrastructure.SeasonProgress seasonProgress;
+    public org.enthusia.events.infrastructure.ArenaPreflight arenaPreflight() { return arenaPreflight; }
+    public org.enthusia.events.infrastructure.ArenaRecovery arenaRecovery() { return arenaRecovery; }
+    public org.enthusia.events.infrastructure.Speedbuilders speedbuilders() { return speedbuilders; }
+    public org.enthusia.events.infrastructure.SeasonProgress seasonProgress() { return seasonProgress; }
+    public PlayerSnapshotService snapshots() { return snapshotService; }
+    public MapSetupService maps() { return mapSetupService; }
+    public java.util.UUID currentSessionId() { return eventManager == null || eventManager.session() == null ? null : eventManager.session().id(); }
 
     @Override
     public void onEnable() {
@@ -121,6 +132,11 @@ public final class EnthusiaEventsPlugin extends JavaPlugin {
         kitService = new EventKitService(this);
         lootTableService = new LootTableService(this);
         eventManager = new EventManager(this, eventRegistry, snapshotService, statsService, economy, mapSetupService, eventConfigService, kitService, lootTableService);
+        arenaPreflight = new org.enthusia.events.infrastructure.ArenaPreflight(this, mapSetupService);
+        arenaRecovery = new org.enthusia.events.infrastructure.ArenaRecovery(this);
+        speedbuilders = new org.enthusia.events.infrastructure.Speedbuilders(this, eventManager);
+        seasonProgress = new org.enthusia.events.infrastructure.SeasonProgress(this);
+        Bukkit.getPluginManager().registerEvents(speedbuilders, this);
         scoreboardService = new EventScoreboardService(this, eventManager);
         arenaResetService = new ArenaResetService(this, eventManager);
         boatRaceService = new BoatRaceService(this, eventManager);
@@ -194,6 +210,8 @@ public final class EnthusiaEventsPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (speedbuilders != null) speedbuilders.stop();
+        if (arenaRecovery != null) arenaRecovery.shutdown();
         if (outcomeService != null) {
             outcomeService.stop();
         }
@@ -258,6 +276,7 @@ public final class EnthusiaEventsPlugin extends JavaPlugin {
         scoreboardService.reload();
         eventRegistry.reload();
         mapSetupService.reload();
+        seasonProgress = new org.enthusia.events.infrastructure.SeasonProgress(this);
         specAuditRegistry.logStartupWarnings();
         scheduler.restart();
         return true;

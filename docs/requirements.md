@@ -16,4 +16,16 @@ Base: authoritative main `58d4a6dea746c4a51dc4999230d6107b93ed672f`. User author
 
 Scope decisions: preserve hourly voting; no arbitrary weekly calendar or new payout policy. Runner is the recommended first new game; Speedbuilders/Paint Panic remain later alternatives rather than simultaneous replacements. No direct Surf inventory-restore transplant, dummy-entity dependency, automatic Discord webhook or guild-XP policy is introduced.
 
+## Roadmap implementation follow-up
+
+The renewed request authorizes draft source implementation; the earlier testing hold remains active. [PR #16](https://github.com/wsg138/EnthusiaEvents/pull/16) defines the full REC/SNAP/PREF/BUILD/SEAS roadmap. This branch implements the first bounded slices below and does not claim the full roadmap or its behavioral proof is complete.
+
+- ROAD-001: Before confirmed event capture succeeds, the system shall acknowledge atomic snapshot persistence; on failure it shall restore the prior in-memory record and reject entry before temporary inventory changes.
+- ROAD-002: When history is enabled, the system shall write immutable per-player capture versions with identity/integrity metadata and expose inspection only; unreadable legacy storage shall remain intact and block new capture.
+- ROAD-003: When durable arena recovery is enabled, the system shall capture ordinary block data before PRESTART mutation, retain a global lease until complete verified replay, quarantine unfinished startup records, and reject every unsupported tile entity.
+- ROAD-004: When staff run preflight, the system shall inspect bounded loaded-world points without generating chunks/worlds or repairing geometry. Opt-in activation enforcement shall recheck before ACTIVE; recovery and Speedbuilders require these checks.
+- ROAD-005: When an explicitly enabled private Speedbuilders session starts, the system shall validate equivalent isolated plots and a supported template, run bounded reset/memory/build/scoring phases, share tied results and grant no currency.
+- ROAD-006: When explicitly configured production season progress is enabled, the system shall pin an eligible public session to its ACTIVE-time season, persist a unique completion ledger, exclude private/test/cancelled outcomes, preserve lifetime stats and expose read-only counts.
+- ROAD-007: While testing is held, this source shall remain an uncompiled, unverified draft without a JAR or server activation; future behavioral proof, client acceptance and release gates remain open.
+
 Evidence: task-local Discord playtest audit and static SurfEvents inspection, retained outside this repository. Public source findings and regression proof are recorded in verification.md.

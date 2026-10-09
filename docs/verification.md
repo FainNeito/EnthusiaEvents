@@ -63,3 +63,9 @@ Implementation commit `fca7f5a3960783a5d96f624f9518de9c9f1cced8` passed Codacy w
 Before the testing hold, a checksum-verified candidate enabled on TEST with CombatLogX and NotBounties integrations. An empty private Runner session selected its isolated map, stopped normally and persisted two trace records with zero drops and reset pending=0. No players participated. Existing incomplete map setup was reported separately; no full game, inventory restoration, hitbox or rendering acceptance is claimed.
 
 The user then put testing on hold. This follow-up reconciles documentation, release boundaries and command usage only. Current main was fetched and remained `58d4a6d`. No gameplay code, tests, dependencies, workflow, reward policy or default configuration changed; no local tests/builds or server actions were performed. Text review and `git diff --check` are appropriate to this scope. Existing automatic hosted checks on a documentation/help commit do not extend runtime acceptance.
+
+## Roadmap source draft
+
+The subsequent implementation request adds ROAD-001 through ROAD-007 source on a separate branch. No compilation, plugin tests, packaging or server/client actions were performed. The prior passing suite/API evidence does not apply to this new head. Source inspection and `git diff --check` are the only code checks claimed during the hold. Future failure/regression and runtime gates are in roadmap-work.md.
+
+The [implementation-state preview](https://chatgpt.com/space/page_ccbed6c3c180819187bfc13e2457aabc) was saved and read back. Local fixture controls rendered at 360px, with preview root clientWidth=scrollWidth=328px. This is presentation inspection only. Owner login is required; authenticated phone access and real Minecraft rendering remain unverified.

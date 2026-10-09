@@ -29,16 +29,18 @@ public final class EventToolsCommands {
         this.plugin = plugin; this.manager = manager; this.gui = gui; this.lootTables = loot; this.reset = reset;
     }
     public boolean handle(CommandSender sender, String[] args) {
-        if (args.length == 0 || !List.of("readiness", "loot", "trace", "resetarena").contains(args[0].toLowerCase(Locale.ROOT))) return false;
+        if (args.length == 0 || !List.of("readiness", "loot", "trace", "resetarena", "preflight", "recovery").contains(args[0].toLowerCase(Locale.ROOT))) return false;
         if (!sender.hasPermission("enthusia.events.admin")) { sender.sendMessage("No permission."); return true; }
         try {
             dispatch(sender, args);
         } catch (IllegalArgumentException failure) { sender.sendMessage(failure.getMessage()); }
-        catch (IOException failure) { sender.sendMessage("Save failed; previous loot remains active. See console."); plugin.getLogger().warning("Loot save failed: " + failure); }
+        catch (IOException failure) { sender.sendMessage("Tool storage operation failed; retained files require inspection. See console."); plugin.getLogger().warning("Event tool storage failed: " + failure); }
         return true;
     }
     private void dispatch(CommandSender sender, String[] args) throws IOException {
         switch (args[0].toLowerCase(Locale.ROOT)) {
+                case "preflight" -> preflight(sender, args);
+                case "recovery" -> recovery(sender, args);
                 case "trace" -> trace(sender, args);
                 case "resetarena" -> {
                     if (manager.hasSession()) throw new IllegalArgumentException("Stop the event before retrying arena reset.");
@@ -58,6 +60,33 @@ public final class EventToolsCommands {
     private Player player(CommandSender sender) {
         if (sender instanceof Player player) return player;
         throw new IllegalArgumentException("Open this view in-game.");
+    }
+    private void preflight(CommandSender sender, String[] args) {
+        if (args.length != 3) throw new IllegalArgumentException("/ee preflight <EVENT> <map>");
+        EventType type = EventType.parse(args[1]);
+        var map = plugin.maps().find(type, args[2]).orElseThrow(() -> new IllegalArgumentException("Unknown map"));
+        var findings = plugin.arenaPreflight().inspect(map);
+        sender.sendMessage("Preflight " + type + "/" + map.id() + " world=" + map.worldName() + ": "
+                + (ArenaPreflight.ready(findings) && !manager.isArenaResetting() ? "READY" : "BLOCKED/UNKNOWN"));
+        if (manager.isArenaResetting()) sender.sendMessage("Arena recovery/reset is outstanding; activation remains blocked.");
+        findings.stream().limit(24).map(org.enthusia.events.domain.PreflightFinding::text).forEach(sender::sendMessage);
+        if (findings.size() > 24) sender.sendMessage("Additional findings omitted; repair listed blockers and inspect again.");
+    }
+    private void recovery(CommandSender sender, String[] args) throws IOException {
+        if (!sender.hasPermission("enthusia.events.recovery.inspect")) throw new IllegalArgumentException("No recovery inspection permission.");
+        if (args.length == 3 && args[1].equalsIgnoreCase("player")) {
+            plugin.snapshots().history(UUID.fromString(args[2])).forEach(sender::sendMessage); return;
+        }
+        if (args.length == 2 && List.of("list", "inspect").contains(args[1].toLowerCase(Locale.ROOT))) {
+            sender.sendMessage(plugin.arenaRecovery().status()); return;
+        }
+        if (args.length == 2 && args[1].equalsIgnoreCase("retry")) {
+            if (!sender.hasPermission("enthusia.events.recovery.retry")) throw new IllegalArgumentException("No recovery retry permission.");
+            if (manager.hasSession()) throw new IllegalArgumentException("Stop the event before recovery retry.");
+            if (reset.pendingBlocks() > 0) throw new IllegalArgumentException("Retry retained legacy blocks with /ee resetarena before durable recovery.");
+            plugin.arenaRecovery().retry(); sender.sendMessage(plugin.arenaRecovery().status()); return;
+        }
+        throw new IllegalArgumentException("/ee recovery <list|inspect|retry|player <uuid>>; historical inventory application is unavailable");
     }
     private void loot(CommandSender sender, String[] args) throws IOException {
         if (args.length < LOOT_ARGUMENT_COUNT) throw new IllegalArgumentException("/ee loot <SKYWARS|BEDWARS> <1-3> [sample|edit <id> <min> <max> <chance 0-1>|limits <armor> <weapons> <total>]");

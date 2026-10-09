@@ -1,5 +1,7 @@
 # Release readiness
 
+New roadmap implementation on this branch is uncompiled and untested under the active testing hold. The evidence below describes the earlier PR #15 slice only; see [roadmap-work.md](roadmap-work.md) for the new draft and its open gates.
+
 As of 2026-10-09, PR [#15](https://github.com/wsg138/EnthusiaEvents/pull/15) is open and ready for review. Testing is on hold at the user's request. The paused acceptance checklist is in [playtest.md](playtest.md). This document records existing evidence and release preparation; it does not authorize another test, merge or deployment.
 
 ## Source and artifact provenance

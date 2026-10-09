@@ -58,6 +58,7 @@ public final class EventSpecAuditRegistry {
     }
 
     private void registerDefaults() {
+        put(EventType.SPEEDBUILDERS, "private opt-in, plot-<id> areas/spawns, build-template area, durable ordinary-block recovery", false, false, "highest build score; tied winners", "durable baseline");
         put(EventType.SKYWARS, "spawn, spectator, region, tiered chests", true, true, "last player standing", "tracked blocks");
         put(EventType.BEDWARS, "team spawns, spectator, region, beds, shops, generators", true, true, "last team alive", "tracked blocks");
         put(EventType.FIGHT_1V1, "spawns, spectator, region", true, false, "last player standing", "restore players");

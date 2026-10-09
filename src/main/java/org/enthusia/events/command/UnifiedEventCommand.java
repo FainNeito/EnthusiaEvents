@@ -16,12 +16,12 @@ import java.util.stream.Collectors;
 public final class UnifiedEventCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> PLAYER_SUBCOMMANDS = List.of(
-            "join", "leave", "spectate", "vote", "start", "stats", "next", "time", "timer", "browse", "schedule"
+            "join", "leave", "spectate", "vote", "start", "stats", "next", "time", "timer", "browse", "schedule", "season"
     );
     private static final List<String> ADMIN_SUBCOMMANDS = List.of(
             "autostart", "disable", "enable", "enabled", "disabled", "status", "private", "invite",
             "forcestart", "simulatevote", "advance", "forcestop", "eventtp", "stop", "restore", "stuckcheck",
-            "emergencyrestore", "remove", "reload", "retryrestores", "kit", "resetconfigs", "resetloot", "map", "setup", "readiness", "loot", "trace", "resetarena"
+            "emergencyrestore", "remove", "reload", "retryrestores", "kit", "resetconfigs", "resetloot", "map", "setup", "readiness", "loot", "trace", "resetarena", "preflight", "recovery"
     );
 
     private final EventCommand eventCommand;

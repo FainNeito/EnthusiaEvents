@@ -116,6 +116,7 @@ public final class EventConfigService {
 
     private EventSettings defaults(EventType type) {
         return switch (type) {
+            case SPEEDBUILDERS -> new EventSettings(Material.BRICKS, "Memorize and rebuild a template in your private plot. Equal scores share the result.", 2, 2, 0.0D, 1200L);
             case SKYWARS -> new EventSettings(Material.FEATHER, "Loot island chests, bridge carefully, and be the last player alive.", 2, 2, 100.0D, 600L);
             case BEDWARS -> new EventSettings(Material.RED_BED, "Solo BedWars. Protect your bed, use island generators, and eliminate every other player.", 2, 2, 100.0D, 1200L);
             case FIGHT_1V1 -> new EventSettings(Material.IRON_SWORD, "A straight kit fight. Last player standing wins.", 2, 2, 100.0D, 300L);

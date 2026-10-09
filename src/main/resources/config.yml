@@ -100,6 +100,36 @@ events:
 stats:
   save-on-change: true
 
+# Unverified roadmap additions. Keep opt-ins off until review and deferred proof are complete.
+preflight:
+  enforce-start: false
+  max-points: 128
+
+recovery:
+  arena:
+    enabled: false
+    max-blocks: 20000
+    blocks-per-tick: 128
+  player-history:
+    enabled: false
+    # Inspection only. This first slice retains every archive; pending records are never pruned.
+
+speedbuilders:
+  enabled: false
+  # Also add SPEEDBUILDERS to events.enabled for its private definition; it stays out of public choices.
+  memory-seconds: 30
+  build-seconds: 90
+  rounds: 5
+
+seasons:
+  enabled: false
+  environment: test
+  namespace: ''
+  display-timezone: UTC
+  minimum-active-seconds: 60
+  # Configure explicit immutable IDs with ISO-8601 UTC start/end instants. Retain closed definitions.
+  definitions: {}
+
 parkour:
   fall-distance-below-last-safe-point: 8.0
 
