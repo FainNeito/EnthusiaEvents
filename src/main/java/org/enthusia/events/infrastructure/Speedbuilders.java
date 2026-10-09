@@ -20,11 +20,15 @@ import java.util.*;
 import java.util.function.Consumer;
 
 /** Private opt-in game, with bounded plot work and session/round callback fences. */
+// Gameplay state is exclusively Bukkit main-thread owned; concurrent maps cannot make Paper calls thread safe.
+@SuppressWarnings("PMD.UseConcurrentHashMap")
 public final class Speedbuilders implements Listener {
     private static final String PLOT_PREFIX = "plot-";
     private static final String TEMPLATE_AREA = "build-template";
     private static final String AIR_BLOCK_DATA = "minecraft:air";
     private static final String BUILD_PHASE = "build";
+    private static final int MAX_PLOTS = 8;
+    private static final int MAX_PALETTE = 12;
     private final EnthusiaEventsPlugin plugin;
     private final EventManager manager;
     private EventSession tracked;
@@ -39,8 +43,16 @@ public final class Speedbuilders implements Listener {
     public Speedbuilders(EnthusiaEventsPlugin plugin, EventManager manager) { this.plugin = plugin; this.manager = manager; }
 
     public List<String> validate(EventSession session) {
-        if (!session.privateSession() || !plugin.getConfig().getBoolean("speedbuilders.enabled", false)) return List.of("Speedbuilders requires an enabled private session");
-        if (!plugin.arenaRecovery().enabled(EventType.SPEEDBUILDERS)) return List.of("Speedbuilders requires durable arena recovery");
+        String unavailable = availability(session);
+        if (!unavailable.isEmpty()) return List.of(unavailable);
+        return validateMap(session);
+    }
+    private String availability(EventSession session) {
+        if (!session.privateSession() || !plugin.getConfig().getBoolean("speedbuilders.enabled", false)) return "Speedbuilders requires an enabled private session";
+        if (!plugin.arenaRecovery().enabled(EventType.SPEEDBUILDERS)) return "Speedbuilders requires durable arena recovery";
+        return "";
+    }
+    private List<String> validateMap(EventSession session) {
         EventMap map = session.selectedMap();
         if (map == null || map.region() == null) return List.of("Arena region missing");
         List<String> errors = new ArrayList<>();
@@ -48,12 +60,10 @@ public final class Speedbuilders implements Listener {
         CuboidRegion source = map.areas().get(TEMPLATE_AREA);
         if (!hasRequiredPlots(source, candidates.size(), session.participants().size())) return List.of("Set build-template and one plot-<id> area/spawn per player");
         if (!validTemplateBounds(source, map.region())) errors.add("Template must be 1-512 cells inside the arena");
-        if (candidates.size() > 8) errors.add("Initial release supports at most eight plots");
+        if (candidates.size() > MAX_PLOTS) errors.add("Initial release supports at most eight plots");
         validatePlots(map, source, candidates, errors);
         if (!errors.isEmpty()) return List.copyOf(errors);
-        World world = plugin.getServer().getWorld(map.worldName());
-        if (world == null) return List.of("Original world is unavailable");
-        validateTemplate(source, candidates, map, world, errors);
+        validateLoadedTemplate(source, candidates, map, errors);
         return List.copyOf(errors);
     }
     private static boolean hasRequiredPlots(CuboidRegion source, int plots, int players) { return source != null && plots >= players && plots > 0; }
@@ -77,15 +87,21 @@ public final class Speedbuilders implements Listener {
         if (!plot.contains(spawn)) errors.add(label + " requires a matching safe spawn inside its build volume");
         if (spawn != null && (spawn.getBlockY() != plot.minY() || plot.maxY() - plot.minY() < 1)) errors.add(label + " spawn must be on the bottom layer of a build volume at least two blocks high; its solid floor stays outside the build volume");
     }
+    private void validateLoadedTemplate(CuboidRegion source, List<Map.Entry<String, CuboidRegion>> candidates, EventMap map, List<String> errors) {
+        World world = plugin.getServer().getWorld(map.worldName());
+        if (world == null) { errors.add("Original world is unavailable"); return; }
+        validateTemplate(source, candidates, map, world, errors);
+    }
     private void validateTemplate(CuboidRegion source, List<Map.Entry<String, CuboidRegion>> candidates, EventMap map, World world, List<String> errors) {
         try {
             Map<Offset, String> decoded = read(source, world);
             if (decoded.isEmpty()) errors.add("Template cannot be empty");
             for (String state : decoded.values()) if (!allowed(plugin.getServer().createBlockData(state).getMaterial())) { errors.add("Template contains unsupported material"); break; }
-            if (decoded.values().stream().map(s -> plugin.getServer().createBlockData(s).getMaterial()).distinct().count() > 12) errors.add("Template palette exceeds twelve materials");
+            if (decoded.values().stream().map(s -> plugin.getServer().createBlockData(s).getMaterial()).distinct().count() > MAX_PALETTE) errors.add("Template palette exceeds twelve materials");
             validateViewingCorners(decoded, candidates, map, errors);
         } catch (RuntimeException failure) { errors.add("Template unavailable: " + failure.getMessage()); }
     }
+    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops") // Immutable coordinate keys differ for each configured plot.
     private static void validateViewingCorners(Map<Offset, String> decoded, List<Map.Entry<String, CuboidRegion>> candidates, EventMap map, List<String> errors) {
             for (var entry : candidates) {
                 Location spawn = map.spawns().get(entry.getKey());
@@ -104,9 +120,10 @@ public final class Speedbuilders implements Listener {
         for (UUID player : session.participants()) {
             plots.put(player, available.get(i)); totals.put(player, 0);
             Player online = plugin.getServer().getPlayer(player);
-            if (online == null || !manager.teleportGameParticipant(online, session.selectedMap().spawns().get(names.get(i++)))) {
+            if (online == null || !manager.teleportGameParticipant(online, session.selectedMap().spawns().get(names.get(i)))) {
                 manager.stop("Speedbuilders plot teleport failed"); stop(); return;
             }
+            i++;
         }
         template = read(session.selectedMap().areas().get(TEMPLATE_AREA), plugin.getServer().getWorld(session.selectedMap().worldName()));
         palette = template.values().stream().map(s -> plugin.getServer().createBlockData(s).getMaterial()).distinct().toList();

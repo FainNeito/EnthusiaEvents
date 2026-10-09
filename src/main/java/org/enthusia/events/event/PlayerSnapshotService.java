@@ -30,6 +30,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 public final class PlayerSnapshotService {
+    private static final String CAPTURED_AT_KEY = ".captured-at";
+    private static final String INVENTORY_KEY = ".inventory";
+    private static final String ARMOR_KEY = ".armor";
+    private static final String ALLOW_FLIGHT_KEY = ".allow-flight";
+    private static final String PLAYER_SECTION = "players";
 
     private static final String PLAYER_PREFIX = "players.";
     private static final String CAPTURE_ID_KEY = ".capture-id";
@@ -136,24 +141,25 @@ public final class PlayerSnapshotService {
         UUID token = UUID.randomUUID();
         String hash = "reconcile";
         List<String> lines = new ArrayList<>();
+        UUID selectedCapture = capture;
         if (reconcile) {
-            capture = leases.operation(player.getUniqueId());
+            selectedCapture = leases.operation(player.getUniqueId());
             lines.add("Reconciliation acknowledges CURRENT player state; no inventory will be applied.");
         } else {
             if (!plugin.getConfig().getBoolean("recovery.player-history.enabled", false)) throw new IllegalArgumentException("Player history must be enabled.");
-            var version = archive.read(player.getUniqueId(), capture);
+            var version = archive.read(player.getUniqueId(), selectedCapture);
             if (!version.resolved()) throw new IllegalArgumentException("Only verified resolved history may be applied.");
             PlayerSnapshot candidate = decodeHistorical(player.getUniqueId(), version);
             hash = version.hash();
             PlayerSnapshot current = PlayerSnapshot.capture(player);
-            lines.add("Capture=" + capture + " timestamp=" + version.capturedAt() + " checksum=" + hash);
+            lines.add("Capture=" + selectedCapture + " timestamp=" + version.capturedAt() + " checksum=" + hash);
             lines.add("Inventory differs=" + !java.util.Arrays.equals(current.inventory(), candidate.inventory())
                     + "; armor differs=" + !java.util.Arrays.equals(current.armor(), candidate.armor())
                     + "; XP=" + current.totalExperience() + " -> " + candidate.totalExperience()
                     + "; mode=" + current.gameMode() + " -> " + candidate.gameMode());
             lines.add("Historical items may have been transferred/spent. Reconcile those items before confirming; current state will be archived as undo.");
         }
-        confirmations.put(token, new HistoricalConfirmation(player.getUniqueId(), capture, actor.getName(), reason, fingerprint, hash,
+        confirmations.put(token, new HistoricalConfirmation(player.getUniqueId(), selectedCapture, actor.getName(), reason, fingerprint, hash,
                 System.currentTimeMillis() + 90_000L, reconcile));
         confirmations.entrySet().removeIf(e -> e.getValue().expires() < System.currentTimeMillis());
         lines.add("Reason=" + reason + "; confirm within 90s: /ee recovery confirm " + token);
@@ -187,14 +193,17 @@ public final class PlayerSnapshotService {
         if (undo == null) throw new IOException("Undo archive missing; no application attempted");
         UUID operation = leases.begin(confirmation.player(), confirmation.capture(), undo, actor.getName(), confirmation.reason(), confirmation.fingerprint());
         try {
-            if (candidate.location() != null && !player.teleport(candidate.location())) throw new IOException("Historical teleport rejected");
-            if (!applySnapshot(player, candidate) || !markRestored(confirmation.player(), false)) throw new IOException("Historical state/acknowledgement failed");
+            applyHistoricalState(player, candidate, confirmation.player());
             leases.finish(confirmation.player(), operation, "APPLIED", actor.getName(), confirmation.reason());
             return "Historical recovery applied and audited; undo capture=" + undo;
         } catch (IOException | RuntimeException failure) {
             plugin.getLogger().log(Level.SEVERE, "Historical recovery requires reconciliation for " + confirmation.player(), failure);
             throw new IOException("Uncertain historical outcome retained; inspect current player state, then use reconcile", failure);
         }
+    }
+    private void applyHistoricalState(Player player, PlayerSnapshot candidate, UUID target) throws IOException {
+        if (candidate.location() != null && !player.teleport(candidate.location())) throw new IOException("Historical teleport rejected");
+        if (!applySnapshot(player, candidate) || !markRestored(target, false)) throw new IOException("Historical state/acknowledgement failed");
     }
     private void checkHistoricalPlayer(Player player, boolean reconcile) {
         if (player == null || !player.isOnline() || plugin.eventManager().isEventPlayer(player.getUniqueId()))
@@ -215,7 +224,7 @@ public final class PlayerSnapshotService {
         YamlConfiguration state = new YamlConfiguration();
         writeSnapshot(state, player.getUniqueId(), PlayerSnapshot.capture(player));
         String path = PLAYER_PREFIX + player.getUniqueId();
-        state.set(path + ".captured-at", 0L); state.set(path + CAPTURE_ID_KEY, null); state.set(path + ".restored", null);
+        state.set(path + CAPTURED_AT_KEY, 0L); state.set(path + CAPTURE_ID_KEY, null); state.set(path + ".restored", null);
         return PlayerSnapshotArchive.digest(state.saveToString().getBytes(StandardCharsets.UTF_8));
     }
     private PlayerSnapshot decodeHistorical(UUID uuid, PlayerSnapshotArchive.Version version) throws IOException {
@@ -224,15 +233,15 @@ public final class PlayerSnapshotService {
         catch (org.bukkit.configuration.InvalidConfigurationException invalid) { throw new IOException("Invalid archived snapshot", invalid); }
         String path = PLAYER_PREFIX + uuid;
         if (config.getInt("archive-schema") != 1 || !version.id().toString().equals(config.getString(path + CAPTURE_ID_KEY))
-                || config.getLong(path + ".captured-at") != version.capturedAt()) throw new IOException("Historical snapshot identity/schema mismatch");
+                || config.getLong(path + CAPTURED_AT_KEY) != version.capturedAt()) throw new IOException("Historical snapshot identity/schema mismatch");
         Location location = historicalLocation(config, path);
         validateHistoricalFields(config, path);
         int totalExperience = config.getInt(path + TOTAL_EXPERIENCE_KEY);
         ExperienceDisplay experienceDisplay = loadExperienceDisplay(config, path, totalExperience);
         return new PlayerSnapshot(
                         location,
-                        itemStackArray(config.getList(path + ".inventory"), INVENTORY_SIZE),
-                        itemStackArray(config.getList(path + ".armor"), ARMOR_SIZE),
+                        itemStackArray(config.getList(path + INVENTORY_KEY), INVENTORY_SIZE),
+                        itemStackArray(config.getList(path + ARMOR_KEY), ARMOR_SIZE),
                         config.getItemStack(path + ".offhand"),
                         config.getDouble(path + MAX_HEALTH_KEY, 20.0D),
                         config.getDouble(path + HEALTH_KEY, 20.0D),
@@ -244,7 +253,7 @@ public final class PlayerSnapshotService {
                         experienceDisplay.progress(),
                         parseGameMode(config.getString(path + GAME_MODE_KEY, GameMode.SURVIVAL.name())),
                         potionEffects(config.getList(path + POTION_EFFECTS_KEY)),
-                        config.getBoolean(path + ".allow-flight", false),
+                        config.getBoolean(path + ALLOW_FLIGHT_KEY, false),
                         config.getBoolean(path + FLYING_KEY, false),
                         (float) config.getDouble(path + WALK_SPEED_KEY, 0.2D),
                         (float) config.getDouble(path + FLY_SPEED_KEY, 0.1D)
@@ -295,11 +304,11 @@ public final class PlayerSnapshotService {
     private static void validateHistoricalInventory(YamlConfiguration config, String path) throws IOException {
         try { GameMode.valueOf(config.getString(path + GAME_MODE_KEY, "")); }
         catch (IllegalArgumentException invalid) { throw new IOException("Invalid archived game mode", invalid); }
-        validateItemList(config.getList(path + ".inventory"), INVENTORY_SIZE);
-        validateItemList(config.getList(path + ".armor"), ARMOR_SIZE);
+        validateItemList(config.getList(path + INVENTORY_KEY), INVENTORY_SIZE);
+        validateItemList(config.getList(path + ARMOR_KEY), ARMOR_SIZE);
         List<?> effects = config.getList(path + POTION_EFFECTS_KEY);
         if (effects == null || effects.stream().anyMatch(effect -> !(effect instanceof PotionEffect))) throw new IOException("Invalid archived effects");
-        if (config.getBoolean(path + FLYING_KEY) && !config.getBoolean(path + ".allow-flight")) throw new IOException("Invalid archived flight state");
+        if (config.getBoolean(path + FLYING_KEY) && !config.getBoolean(path + ALLOW_FLIGHT_KEY)) throw new IOException("Invalid archived flight state");
     }
     private static void validateItemList(List<?> items, int size) throws IOException {
         if (items == null || items.size() != size || items.stream().anyMatch(item -> item != null && !(item instanceof ItemStack)))
@@ -518,12 +527,12 @@ public final class PlayerSnapshotService {
     private void writeSnapshot(YamlConfiguration config, UUID uuid, PlayerSnapshot snapshot) {
         String path = PLAYER_PREFIX + uuid;
         config.set(path + CAPTURE_ID_KEY, archiveIds.containsKey(uuid) ? archiveIds.get(uuid).toString() : null);
-        config.set(path + ".captured-at", capturedAt.getOrDefault(uuid, System.currentTimeMillis()));
+        config.set(path + CAPTURED_AT_KEY, capturedAt.getOrDefault(uuid, System.currentTimeMillis()));
         config.set(path + ".restored", restored.getOrDefault(uuid, false));
         config.set(path + ".location", LocationCodec.encode(snapshot.location()));
         config.set(path + ".world-uuid", snapshot.location() == null || snapshot.location().getWorld() == null ? null : snapshot.location().getWorld().getUID().toString());
-        config.set(path + ".inventory", nullableList(snapshot.inventory()));
-        config.set(path + ".armor", nullableList(snapshot.armor()));
+        config.set(path + INVENTORY_KEY, nullableList(snapshot.inventory()));
+        config.set(path + ARMOR_KEY, nullableList(snapshot.armor()));
         config.set(path + ".offhand", snapshot.offhand());
         config.set(path + MAX_HEALTH_KEY, snapshot.maxHealth());
         config.set(path + HEALTH_KEY, snapshot.health());
@@ -535,7 +544,7 @@ public final class PlayerSnapshotService {
         config.set(path + EXPERIENCE_PROGRESS_KEY, snapshot.experienceProgress());
         config.set(path + GAME_MODE_KEY, snapshot.gameMode().name());
         config.set(path + POTION_EFFECTS_KEY, new ArrayList<>(snapshot.potionEffects()));
-        config.set(path + ".allow-flight", snapshot.allowFlight());
+        config.set(path + ALLOW_FLIGHT_KEY, snapshot.allowFlight());
         config.set(path + FLYING_KEY, snapshot.flying());
         config.set(path + WALK_SPEED_KEY, snapshot.walkSpeed());
         config.set(path + FLY_SPEED_KEY, snapshot.flySpeed());
@@ -552,17 +561,17 @@ public final class PlayerSnapshotService {
             plugin.getLogger().log(Level.SEVERE, "Snapshot storage unreadable; preserved original file and blocked captures.", failure);
             return;
         }
-        if (!config.isConfigurationSection("players")) {
+        if (!config.isConfigurationSection(PLAYER_SECTION)) {
             if (!config.getKeys(false).isEmpty()) unreadableStorage = true;
             return;
         }
         long now = System.currentTimeMillis();
         boolean changed = false;
-        for (String key : Objects.requireNonNull(config.getConfigurationSection("players")).getKeys(false)) {
+        for (String key : Objects.requireNonNull(config.getConfigurationSection(PLAYER_SECTION)).getKeys(false)) {
             try {
                 UUID uuid = UUID.fromString(key);
                 String path = PLAYER_PREFIX + key;
-                long timestamp = config.getLong(path + ".captured-at", 0L);
+                long timestamp = config.getLong(path + CAPTURED_AT_KEY, 0L);
                 boolean entryRestored = config.getBoolean(path + ".restored", false);
                 if (timestamp <= 0L) { unreadableStorage = true; continue; }
                 if (entryRestored && now - timestamp > SNAPSHOT_TTL_MILLIS) {
@@ -582,8 +591,8 @@ public final class PlayerSnapshotService {
                 ExperienceDisplay experienceDisplay = loadExperienceDisplay(config, path, totalExperience);
                 PlayerSnapshot snapshot = new PlayerSnapshot(
                         location,
-                        itemStackArray(config.getList(path + ".inventory"), INVENTORY_SIZE),
-                        itemStackArray(config.getList(path + ".armor"), ARMOR_SIZE),
+                        itemStackArray(config.getList(path + INVENTORY_KEY), INVENTORY_SIZE),
+                        itemStackArray(config.getList(path + ARMOR_KEY), ARMOR_SIZE),
                         config.getItemStack(path + ".offhand"),
                         config.getDouble(path + MAX_HEALTH_KEY, 20.0D),
                         config.getDouble(path + HEALTH_KEY, 20.0D),
@@ -595,7 +604,7 @@ public final class PlayerSnapshotService {
                         experienceDisplay.progress(),
                         parseGameMode(config.getString(path + GAME_MODE_KEY, GameMode.SURVIVAL.name())),
                         potionEffects(config.getList(path + POTION_EFFECTS_KEY)),
-                        config.getBoolean(path + ".allow-flight", false),
+                        config.getBoolean(path + ALLOW_FLIGHT_KEY, false),
                         config.getBoolean(path + FLYING_KEY, false),
                         (float) config.getDouble(path + WALK_SPEED_KEY, 0.2D),
                         (float) config.getDouble(path + FLY_SPEED_KEY, 0.1D)

@@ -13,6 +13,7 @@ import java.util.function.Consumer;
 
 /** One global recovery lease. Supports ordinary cells and explicitly supported container state. */
 public final class ArenaRecovery {
+    private static final String NULL_LIFECYCLE_RULE = "PMD.NullAssignment";
     private static final String CURRENT_SCHEMA = "EE-ARENA-3";
     private static final int MAX_FILE_BYTES = 16 * 1024 * 1024;
     private static final int MAX_CELLS = 50_000;
@@ -138,7 +139,7 @@ public final class ArenaRecovery {
         }
     }
 
-    @SuppressWarnings("PMD.NullAssignment") // Clears retired work/session/lease references.
+    @SuppressWarnings(NULL_LIFECYCLE_RULE) // Clears retired work/session/lease references.
     public void reset() {
         if (closed) return;
         preparedSession = null;
@@ -146,7 +147,7 @@ public final class ArenaRecovery {
         if (work != null && baseline == null) { cancelWork(); return; }
         if (baseline != null && work == null) retry();
     }
-    @SuppressWarnings("PMD.NullAssignment") // Clears retired work/session/lease references.
+    @SuppressWarnings(NULL_LIFECYCLE_RULE) // Clears retired work/session/lease references.
     public void retry() {
         if (closed) return;
         if (writing || work != null) return;
@@ -155,14 +156,18 @@ public final class ArenaRecovery {
         Baseline restoring = baseline;
         World world = plugin.getServer().getWorld(restoring.world());
         if (world == null) { failure = "Original world UUID unavailable; load it before retry"; return; }
-        EventMap configured = plugin.maps().find(restoring.type(), restoring.map()).orElse(null);
-        if (configured == null || !Objects.equals(configured.region(), restoring.region())) {
-            failure = "Arena identity/bounds changed; restore original setup and inspect before retry"; return;
-        }
+        if (!restoringIdentityMatches(restoring)) return;
         preparedSession = null;
         failure = null;
         Replay replay = new Replay(restoring, world);
         work = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> replayTick(replay), 1L, 1L);
+    }
+    private boolean restoringIdentityMatches(Baseline restoring) {
+        EventMap configured = plugin.maps().find(restoring.type(), restoring.map()).orElse(null);
+        if (configured == null || !Objects.equals(configured.region(), restoring.region())) {
+            failure = "Arena identity/bounds changed; restore original setup and inspect before retry"; return false;
+        }
+        return true;
     }
     private boolean loadPendingBaseline() {
         if (baseline != null) return true;
@@ -207,7 +212,7 @@ public final class ArenaRecovery {
         try { Files.move(pending, pending.resolveSibling(restoring.session() + ".complete.bin"), StandardCopyOption.ATOMIC_MOVE); return ""; }
         catch (IOException | RuntimeException ex) { return "Restored but completion publication failed; retry required"; }
     }
-    @SuppressWarnings("PMD.NullAssignment") // Null clears a completed lease after atomic publication.
+    @SuppressWarnings(NULL_LIFECYCLE_RULE) // Null clears a completed lease after atomic publication.
     private void acknowledgeCompletion(String result) {
         if (closed) return;
         writing = false;
@@ -221,9 +226,9 @@ public final class ArenaRecovery {
         private boolean verifying;
         private Replay(Baseline baseline, World world) { this.baseline = baseline; this.world = world; }
     }
-    @SuppressWarnings("PMD.NullAssignment") // Clears retired work/session/lease references.
+    @SuppressWarnings(NULL_LIFECYCLE_RULE) // Clears retired work/session/lease references.
     public void shutdown() { closed = true; cancelWork(); preparedSession = null; }
-    @SuppressWarnings("PMD.NullAssignment") // Clears retired work/session/lease references.
+    @SuppressWarnings(NULL_LIFECYCLE_RULE) // Clears retired work/session/lease references.
     private void cancelWork() { if (work != null) { work.cancel(); work = null; } }
 
     private static byte[] encode(Baseline baseline) throws IOException {

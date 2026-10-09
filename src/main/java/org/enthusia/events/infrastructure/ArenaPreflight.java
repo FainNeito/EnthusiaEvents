@@ -26,8 +26,10 @@ public final class ArenaPreflight {
             add(findings, Severity.BLOCKER, map.id(), "world unavailable", "Load the original world; this check does not create it");
             return List.copyOf(findings);
         }
-        if (map.region() != null && (!Objects.equals(map.region().worldName(), world.getName()) || !validBounds(map.region(), world)))
-            add(findings, Severity.BLOCKER, map.id(), "region world/bounds invalid", "Re-select both region corners in the original world");
+        inspectRegion(findings, map, world);
+        return inspectLoadedMap(findings, map, world);
+    }
+    private List<PreflightFinding> inspectLoadedMap(List<PreflightFinding> findings, EventMap map, World world) {
         Budget budget = new Budget(Math.clamp(plugin.getConfig().getInt("preflight.max-points", 128), 1, 512));
         if (!inspectSpawns(findings, map, world, budget)) return budgetExceeded(findings, map);
         spawn(findings, map, "spectator", map.spectatorSpawn(), world, false);
@@ -35,6 +37,10 @@ public final class ArenaPreflight {
         if (!inspectBeds(findings, map, world, budget)) return budgetExceeded(findings, map);
         if (!inspectAreas(findings, map, world, budget)) return budgetExceeded(findings, map);
         return List.copyOf(findings);
+    }
+    private static void inspectRegion(List<PreflightFinding> findings, EventMap map, World world) {
+        if (map.region() != null && (!Objects.equals(map.region().worldName(), world.getName()) || !validBounds(map.region(), world)))
+            add(findings, Severity.BLOCKER, map.id(), "region world/bounds invalid", "Re-select both region corners in the original world");
     }
     private boolean inspectSpawns(List<PreflightFinding> findings, EventMap map, World world, Budget budget) {
         for (var entry : map.spawns().entrySet()) {

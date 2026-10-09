@@ -13,24 +13,27 @@ import java.util.UUID;
 
 /** Immutable capture payloads; resolution is separate and cannot overwrite inventory history. */
 public final class PlayerSnapshotArchive {
+    private static final String SNAPSHOT_SUFFIX = ".snapshot";
+    private static final int HISTORY_LIMIT = 20;
+    private static final int VERSION_LIMIT = 10_000;
     private static final int MAX_BYTES = 2 * 1024 * 1024;
     private final Path root;
     public PlayerSnapshotArchive(Path root) { this.root = root; }
     public void capture(UUID player, UUID id, long capturedAt, String payload) throws IOException {
         byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
         if (bytes.length > MAX_BYTES) throw new IOException("Snapshot exceeds archive limit");
-        Path file = directory(player).resolve(id + ".snapshot");
+        Path file = directory(player).resolve(id + SNAPSHOT_SUFFIX);
         if (Files.exists(file)) throw new IOException("Capture ID already exists");
         String envelope = "EE-SNAPSHOT-1\n" + player + "\n" + id + "\n" + capturedAt + "\n" + digest(bytes) + "\n" + payload;
         AtomicFiles.replace(file, envelope.getBytes(StandardCharsets.UTF_8));
     }
     public void resolve(UUID player, UUID id) throws IOException {
-        if (!Files.isRegularFile(directory(player).resolve(id + ".snapshot"))) throw new IOException("Missing archive capture");
+        if (!Files.isRegularFile(directory(player).resolve(id + SNAPSHOT_SUFFIX))) throw new IOException("Missing archive capture");
         AtomicFiles.replace(directory(player).resolve(id + ".resolved"), Long.toString(System.currentTimeMillis()).getBytes(StandardCharsets.UTF_8));
     }
     public record Version(UUID id, long capturedAt, String hash, String payload, boolean resolved) { }
     public Version read(UUID player, UUID id) throws IOException {
-        Path file = directory(player).resolve(id + ".snapshot");
+        Path file = directory(player).resolve(id + SNAPSHOT_SUFFIX);
         if (Files.size(file) > MAX_BYTES + 1024) throw new IOException("Oversized snapshot; retained");
         String[] parts = Files.readString(file).split("\n", 6);
         if (parts.length != 6 || !parts[0].equals("EE-SNAPSHOT-1") || !parts[1].equals(player.toString())
@@ -47,9 +50,9 @@ public final class PlayerSnapshotArchive {
     public List<String> history(UUID player) throws IOException {
         List<String> results = new ArrayList<>();
         for (Path file : files(player)) {
-            if (results.size() == 20) { results.add("More versions retained on disk."); break; }
+            if (results.size() == HISTORY_LIMIT) { results.add("More versions retained on disk."); break; }
             try {
-                Version version = read(player, UUID.fromString(file.getFileName().toString().replace(".snapshot", "")));
+                Version version = read(player, UUID.fromString(file.getFileName().toString().replace(SNAPSHOT_SUFFIX, "")));
                 results.add(version.id() + " captured=" + version.capturedAt() + " " + (version.resolved() ? "resolved" : "pending/unlinked"));
             } catch (IOException | RuntimeException invalid) { results.add(file.getFileName() + " CORRUPT; retained"); }
         }
@@ -61,7 +64,7 @@ public final class PlayerSnapshotArchive {
         int retained = 0;
         for (Path file : files(player)) {
             try {
-                Version version = read(player, UUID.fromString(file.getFileName().toString().replace(".snapshot", "")));
+                Version version = read(player, UUID.fromString(file.getFileName().toString().replace(SNAPSHOT_SUFFIX, "")));
                 if (version.resolved() && !protectedVersion.test(version.id())) resolved.add(version); else retained++;
             } catch (IOException | RuntimeException invalid) { retained++; }
         }
@@ -70,7 +73,7 @@ public final class PlayerSnapshotArchive {
         for (int i = 0; i < resolved.size(); i++) {
             Version version = resolved.get(i);
             if (i < Math.max(1, keep) && version.capturedAt() >= oldestAllowed) continue;
-            Files.delete(directory(player).resolve(version.id() + ".snapshot"));
+            Files.delete(directory(player).resolve(version.id() + SNAPSHOT_SUFFIX));
             Files.deleteIfExists(directory(player).resolve(version.id() + ".resolved"));
             removed++;
         }
@@ -80,8 +83,8 @@ public final class PlayerSnapshotArchive {
         Path directory = directory(player);
         if (!Files.exists(directory)) return List.of();
         try (var files = Files.list(directory)) {
-            List<Path> versions = files.filter(p -> p.getFileName().toString().endsWith(".snapshot")).limit(10_001).toList();
-            if (versions.size() > 10_000) throw new IOException("History exceeds inspection budget; operator storage review required");
+            List<Path> versions = files.filter(p -> p.getFileName().toString().endsWith(SNAPSHOT_SUFFIX)).limit(VERSION_LIMIT + 1L).toList();
+            if (versions.size() > VERSION_LIMIT) throw new IOException("History exceeds inspection budget; operator storage review required");
             return versions;
         }
     }

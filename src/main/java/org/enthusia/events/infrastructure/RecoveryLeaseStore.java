@@ -7,6 +7,7 @@ import java.util.UUID;
 
 /** Durable application fence. Unknown/corrupt states fail closed; no automatic inventory replay. */
 public final class RecoveryLeaseStore {
+    private static final int LEASE_FIELDS = 9;
     private final Path root;
     private final java.util.concurrent.ConcurrentHashMap<UUID, Boolean> isolation = new java.util.concurrent.ConcurrentHashMap<>();
     public RecoveryLeaseStore(Path root) { this.root = root; }
@@ -67,7 +68,7 @@ public final class RecoveryLeaseStore {
         String payload = envelope.substring(separator + 1);
         String[] value = payload.split("\n");
         if (!envelope.substring(0, separator).equals(PlayerSnapshotArchive.digest(payload.getBytes(StandardCharsets.UTF_8)))
-                || value.length != 9 || !value[0].equals("EE-PLAYER-LEASE-1")) throw new IOException("Corrupt recovery lease");
+                || value.length != LEASE_FIELDS || !value[0].equals("EE-PLAYER-LEASE-1")) throw new IOException("Corrupt recovery lease");
         UUID.fromString(value[1]); UUID.fromString(value[2]); UUID.fromString(value[4]); UUID.fromString(value[5]);
         return value;
     }
