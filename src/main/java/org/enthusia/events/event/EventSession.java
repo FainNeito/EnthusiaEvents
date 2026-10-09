@@ -13,6 +13,10 @@ import java.util.UUID;
 @SuppressWarnings("PMD.UseConcurrentHashMap")
 public final class EventSession {
 
+    private final UUID sessionId = UUID.randomUUID();
+    private java.util.function.Consumer<EventPhase> phaseObserver = ignored -> {};
+    public UUID id() { return sessionId; }
+    public void phaseObserver(java.util.function.Consumer<EventPhase> observer) { phaseObserver = observer; }
     private EventDefinition currentDefinition;
     private final Set<UUID> participantIds = new LinkedHashSet<>();
     private final Set<UUID> spectatorIds = new LinkedHashSet<>();
@@ -58,7 +62,9 @@ public final class EventSession {
     }
 
     public void phase(EventPhase phase) {
+        if (currentPhase == phase) return;
         this.currentPhase = phase;
+        phaseObserver.accept(phase);
     }
 
     public Location waitingHub() {

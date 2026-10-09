@@ -35,6 +35,7 @@ public final class LootTableService {
 
     private final EnthusiaEventsPlugin plugin;
     private final File file;
+    private final Map<EventType, Map<Integer, org.enthusia.events.domain.LootLimits>> cachedLimits = new EnumMap<>(EventType.class);
     private final Map<EventType, Map<Integer, List<LootEntry>>> entries = new EnumMap<>(EventType.class);
 
     public LootTableService(EnthusiaEventsPlugin plugin) {
@@ -52,6 +53,12 @@ public final class LootTableService {
             writeDefaults();
         }
         entries.clear();
+        cachedLimits.clear();
+        for (EventType type : List.of(EventType.SKYWARS, EventType.BEDWARS)) {
+            Map<Integer, org.enthusia.events.domain.LootLimits> tiers = new LinkedHashMap<>();
+            for (int tier = 1; tier <= 3; tier++) tiers.put(tier, limits(type, tier));
+            cachedLimits.put(type, tiers);
+        }
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
         mergeDefaults(yaml);
         ConfigurationSection root = yaml.getConfigurationSection("loot");
@@ -88,6 +95,14 @@ public final class LootTableService {
                         plugin.getLogger().warning("Invalid loot material at loot." + eventKey + "." + tierKey + "." + id);
                         continue;
                     }
+                    try {
+                        org.enthusia.events.domain.LootLimits.validateEntry(
+                                item.getInt("min", item.getInt("amount", 1)), item.getInt("max", item.getInt("amount", 1)),
+                                item.getDouble("chance", 1));
+                    } catch (IllegalArgumentException invalid) {
+                        plugin.getLogger().warning("Ignoring invalid loot entry: " + eventKey + "." + tierKey + "." + id);
+                        continue;
+                    }
                     tierEntries.add(new LootEntry(
                             material,
                             Math.max(1, item.getInt("min", item.getInt("amount", 1))),
@@ -102,20 +117,90 @@ public final class LootTableService {
         }
     }
 
+    public record EntryView(String id, Material material, int min, int max, double chance) {}
+    private String tierPath(EventType type, int tier) {
+        if ((type != EventType.SKYWARS && type != EventType.BEDWARS) || tier < 1 || tier > 3)
+            throw new IllegalArgumentException("Use SKYWARS or BEDWARS, tier 1-3");
+        return "loot." + type.name() + ".tier" + tier;
+    }
+    public List<EntryView> inspect(EventType type, int tier) {
+        ConfigurationSection section = YamlConfiguration.loadConfiguration(file).getConfigurationSection(tierPath(type, tier));
+        if (section == null) return List.of();
+        List<EntryView> result = new ArrayList<>();
+        for (String id : section.getKeys(false)) {
+            ConfigurationSection item = section.getConfigurationSection(id);
+            if (item == null) continue;
+            Material material = Material.matchMaterial(item.getString("material", ""));
+            if (material != null) result.add(new EntryView(id, material,
+                    item.getInt("min", item.getInt("amount", 1)), item.getInt("max", item.getInt("amount", 1)),
+                    item.getDouble("chance", 1)));
+        }
+        return List.copyOf(result);
+    }
+    public org.enthusia.events.domain.LootLimits limits(EventType type, int tier) {
+        var yaml = YamlConfiguration.loadConfiguration(file);
+        String path = "limits." + type + ".tier" + tier;
+        return new org.enthusia.events.domain.LootLimits(Math.max(0, yaml.getInt(path + ".armor", 0)),
+                Math.max(0, yaml.getInt(path + ".weapons", 0)), Math.max(0, yaml.getInt(path + ".total", 0)));
+    }
+    public void edit(EventType type, int tier, String id, int min, int max, double chance) throws IOException {
+        org.enthusia.events.domain.LootLimits.validateEntry(min, max, chance);
+        if (!id.matches("[a-zA-Z0-9_-]{1,80}")) throw new IllegalArgumentException("Invalid item id");
+        var yaml = YamlConfiguration.loadConfiguration(file);
+        String path = tierPath(type, tier) + "." + id;
+        if (!yaml.isConfigurationSection(path)) throw new IllegalArgumentException("Unknown entry: " + id);
+        yaml.set(path + ".min", min); yaml.set(path + ".max", max); yaml.set(path + ".chance", chance);
+        saveAtomically(yaml); reload();
+    }
+    public void setLimits(EventType type, int tier, org.enthusia.events.domain.LootLimits limits) throws IOException {
+        tierPath(type, tier);
+        var yaml = YamlConfiguration.loadConfiguration(file);
+        String path = "limits." + type + ".tier" + tier;
+        yaml.set(path + ".armor", limits.maxArmor()); yaml.set(path + ".weapons", limits.maxWeapons());
+        yaml.set(path + ".total", limits.maxTotal());
+        saveAtomically(yaml); reload();
+    }
+    private void saveAtomically(YamlConfiguration yaml) throws IOException {
+        var target = file.toPath();
+        var temp = java.nio.file.Files.createTempFile(target.getParent(), "loot-", ".tmp");
+        try {
+            java.nio.file.Files.writeString(temp, yaml.saveToString(), java.nio.charset.StandardCharsets.UTF_8);
+            java.nio.file.Files.move(temp, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } finally { java.nio.file.Files.deleteIfExists(temp); }
+    }
+    private boolean armor(Material material) {
+        String name = material.name();
+        return name.endsWith("_HELMET") || name.endsWith("_CHESTPLATE") || name.endsWith("_LEGGINGS") || name.endsWith("_BOOTS");
+    }
+    private boolean weapon(Material material) {
+        String name = material.name();
+        return name.endsWith("_SWORD") || name.endsWith("_AXE") || material == Material.BOW || material == Material.CROSSBOW || material == Material.TRIDENT || material == Material.MACE;
+    }
     public List<ItemStack> roll(EventType type, int tier) {
         List<LootEntry> tierEntries = entries.getOrDefault(type, Map.of()).get(tier);
         if (tierEntries == null || tierEntries.isEmpty()) {
             tierEntries = entries.getOrDefault(type, Map.of()).get(1);
+            tier = 1;
         }
         if (tierEntries == null || tierEntries.isEmpty()) {
             return List.of();
         }
         List<ItemStack> items = new ArrayList<>();
+        var limits = cachedLimits.getOrDefault(type, Map.of()).getOrDefault(tier,
+                new org.enthusia.events.domain.LootLimits(0, 0, 0));
+        int armorCount = 0, weaponCount = 0;
+        var shuffled = new ArrayList<>(tierEntries);
+        java.util.Collections.shuffle(shuffled);
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        for (LootEntry entry : tierEntries) {
-            if (random.nextDouble() > entry.chance()) {
+        for (LootEntry entry : shuffled) {
+            if (random.nextDouble() >= entry.chance()) {
                 continue;
             }
+            boolean isArmor = armor(entry.material()), isWeapon = weapon(entry.material());
+            if (!limits.permits(armorCount, weaponCount, items.size(), isArmor, isWeapon)) continue;
+            if (isArmor) armorCount++;
+            if (isWeapon) weaponCount++;
             int amount = entry.min() == entry.max() ? entry.min() : random.nextInt(entry.min(), entry.max() + 1);
             items.add(entry.createItem(amount));
         }
@@ -167,7 +252,12 @@ public final class LootTableService {
 
     private YamlConfiguration defaultYaml() {
         YamlConfiguration yaml = new YamlConfiguration();
-        yaml.set("config-version", 2);
+        yaml.set("config-version", 3);
+        for (int tier = 1; tier <= 3; tier++) {
+            yaml.set("limits.SKYWARS.tier" + tier + ".armor", 0);
+            yaml.set("limits.SKYWARS.tier" + tier + ".weapons", 0);
+            yaml.set("limits.SKYWARS.tier" + tier + ".total", 0);
+        }
 
         set(yaml, "loot.SKYWARS.tier1.oak_planks", Material.OAK_PLANKS, 12, 28, 0.95D);
         set(yaml, "loot.SKYWARS.tier1.cobblestone", Material.COBBLESTONE, 12, 32, 0.90D);
@@ -323,7 +413,8 @@ public final class LootTableService {
         if (digits.isBlank()) {
             return -1;
         }
-        return Integer.parseInt(digits);
+        try { return Integer.parseInt(digits); }
+        catch (NumberFormatException invalid) { return -1; }
     }
 
     private record LootEntry(Material material, int min, int max, double chance,

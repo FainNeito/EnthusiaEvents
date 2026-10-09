@@ -131,6 +131,7 @@ public final class EventConfigService {
             case CAPTURE_PLAYERS -> new EventSettings(Material.IRON_CHAIN, "Capture enemy players, defend your jail, and free your teammates.", 2, 4, 100.0D, 600L);
             case BLOCK_PARTY -> new EventSettings(Material.NOTE_BLOCK, "Stand on the called color before the timer locks each round.", 2, 4, 100.0D, 420L);
             case HOT_POTATO -> new EventSettings(Material.BAKED_POTATO, "Pass the hot potato before it explodes. Last player safe wins.", 2, 4, 100.0D, 420L);
+            case RUNNER -> new EventSettings(Material.TNT, "Keep running as the floor disappears. Last player standing wins.", 2, 4, 100.0D, 420L);
             case SPLEEF -> new EventSettings(Material.DIAMOND_SHOVEL, "Break the floor under other players and be the last one standing.", 2, 4, 100.0D, 420L);
             case SPLEGG -> new EventSettings(Material.SNOWBALL, "Use snowballs and shovels to break blocks and drop opponents.", 2, 4, 100.0D, 420L);
             case RED_LIGHT_GREEN_LIGHT -> new EventSettings(Material.REDSTONE_TORCH, "Move on green, freeze on red, and survive until the end.", 2, 4, 100.0D, 300L);

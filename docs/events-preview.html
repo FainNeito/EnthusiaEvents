@@ -1,0 +1,70 @@
+<div id="events-preview">
+  <div class="viz-dotted-background">
+    <div class="preview-controls">
+      <label>Preview screen <select aria-label="Preview screen"><option value="browse">Player browser</option><option value="schedule">Schedule</option><option value="readiness">Staff readiness</option><option value="loot">Staff loot table</option><option value="sample">Loot sample</option></select></label>
+    </div>
+    <div class="inventory">
+      <h3 class="inventory-title"></h3>
+      <div class="slots"></div>
+      <div class="slot-detail" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+<style>
+#events-preview{color:light-dark(#282828,#eeeeee);font:14px system-ui,sans-serif}
+#events-preview .preview-controls{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0}
+#events-preview select{font:inherit;min-height:44px;max-width:100%;color:inherit;background:light-dark(#eee,#292929);padding:8px;border:1px solid light-dark(#999,#777)}
+#events-preview .inventory{background:light-dark(#c6c6c6,#343434);padding:12px;border:3px solid light-dark(#888,#777);color:light-dark(#242424,#fff)}
+#events-preview .inventory-title{margin:0 0 10px;font:500 16px system-ui;overflow-wrap:anywhere}
+#events-preview .slots{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:4px}
+#events-preview .slot{display:flex;align-items:center;justify-content:center;min-height:54px;background:light-dark(#9d9d9d,#555);border:2px solid light-dark(#747474,#777);padding:3px;text-align:center;font:12px system-ui;overflow-wrap:anywhere;color:inherit}
+#events-preview button.slot{font:12px system-ui;min-height:54px}
+#events-preview button.slot:hover{background:light-dark(#dedede,#6d6d6d)}
+#events-preview .slot-detail{background:light-dark(#ececec,#292929);margin-top:10px;padding:10px;min-height:44px;overflow-wrap:anywhere;white-space:pre-line}
+@media(max-width:620px){#events-preview .slots{grid-template-columns:repeat(5,minmax(0,1fr))}#events-preview .slot{min-height:58px}}
+@media(max-width:360px){#events-preview .slots{grid-template-columns:repeat(3,minmax(0,1fr))}}
+</style>
+<script>
+(()=>{
+const root=document.getElementById('events-preview');
+const chooser=root.querySelector('select'), slots=root.querySelector('.slots'), detail=root.querySelector('.slot-detail'), title=root.querySelector('h3');
+const types=['SKYWARS','BEDWARS','FIGHT_1V1','FIGHT_2V2','FIGHT_FFA','SUMO_1V1','SUMO_2V2','SUMO_FFA','KNOCKBACK_FFA','QUAKE','ONE_IN_THE_CHAMBER','CAPTURE_THE_FLAG','CAPTURE_PLAYERS','BLOCK_PARTY','HOT_POTATO','SPLEEF','SPLEGG','RED_LIGHT_GREEN_LIGHT','BOAT_RACE','HORSE_RACE','ELYTRA_RACE','PARKOUR','RUNNER'];
+const descriptions=['Loot island chests, bridge carefully, and be the last player alive.','Solo BedWars. Protect your bed, use island generators, and eliminate every other player.'];
+let selected='SKYWARS',view='browse';
+const saved=window.openai?.widgetState?.privateContent;if(saved && ['browse','schedule','readiness','loot','sample','details'].includes(saved.view)){view=saved.view;selected=types.includes(saved.selected)?saved.selected:'SKYWARS'}
+function persist(){window.openai?.setWidgetState?.({modelContent:{screen:view,event:selected},privateContent:{view,selected}}).catch(()=>{})}
+function choose(next){view=next;render();persist()}
+function entry(slot,name,text,action){const el=document.createElement(action?'button':'div');el.className='slot'+(action?' cursor-interaction':'');el.textContent=name;el.setAttribute('aria-label',`Slot ${slot+1}: ${name||'empty'}`);if(action){el.type='button';el.onclick=()=>{detail.textContent=text;action()}}return el}
+function render(){
+ chooser.value=view==='details'?'browse':view;slots.replaceChildren();detail.textContent='Select an item to read its description. Sample data; items cannot be taken.';
+ const cells=new Map();let header='Events • Browse';
+ if(view==='browse'){
+  types.forEach((type,i)=>cells.set(i,{name:type.replaceAll('_',' '),text:type==='RUNNER'?'Disabled by default; opt in only after a private playtest.':descriptions[i]||'Read the configured event description in-game.',action:()=>{selected=type;choose('details')}}));
+  cells.set(49,{name:'Schedule',text:'Inspect automatic voting',action:()=>choose('schedule')});
+ }else if(view==='details'){
+  header='Events • '+selected;
+  cells.set(22,{name:selected,text:(descriptions[types.indexOf(selected)]||'Configured description')+'\nConfigured maps: 2\nReady maps: 1\nUse /event start '+selected+' to request a start.\nThese counts are sample data.',action:()=>{}});
+  cells.set(31,{name:'Staff readiness',text:'Staff permission required in-game',action:()=>choose('readiness')});
+  cells.set(49,{name:'Browse events',text:'Return to browser',action:()=>choose('browse')});
+ }else if(view==='schedule'){
+  header='Events • Schedule';cells.set(22,{name:'Hourly vote',text:'Automatic voting is off\nA vote chooses an event; this is not a guaranteed start.\nMinimum players and map readiness still apply.\nWhen enabled, the next hourly vote uses server time.',action:()=>{}});
+  cells.set(49,{name:'Browse events',text:'Return',action:()=>choose('browse')});
+ }else if(view==='readiness'){
+  header='Readiness • '+selected;
+  cells.set(0,{name:'islands_ready',text:'Ready\nWorld: events_sample\nSpawns: island-1, island-2\nAreas: loot-zone\nPoints: spectator\nRepair: /ee setup '+selected+' islands_ready\nInspect: /ee map help',action:()=>{}});
+  cells.set(1,{name:'islands_draft',text:'Needs setup\nWorld: events_sample\nregion is not set\nspectator spawn is required\nRepair: /ee setup '+selected+' islands_draft\nRead-only view: this does not modify maps.',action:()=>{}});
+ }else{
+  header=(view==='sample'?'Sample • ':'Loot • ')+'SKYWARS 3';
+  const table=[['diamond_sword','DIAMOND SWORD','Amount: 1–1\nChance: 55%'],['diamond_helmet','DIAMOND HELMET','Amount: 1–1\nChance: 30%'],['oak_planks','OAK PLANKS','Amount: 20–48\nChance: 95%'],['steak','COOKED BEEF','Amount: 5–12\nChance: 75%']];
+  table.forEach((row,i)=>cells.set(i,{name:view==='sample'?row[1]:row[0],text:view==='sample'?'Sample result only; not a statistical guarantee.':row[2]+'\nEdit: /ee loot SKYWARS 3 edit '+row[0]+' <min> <max> <chance 0-1>\nEdits are blocked during an event or reset.',action:()=>{}}));
+  cells.set(48,{name:'Limits',text:'Limits (0 = unlimited)\nArmor: 0\nWeapons: 0\nTotal entries: 0\nExample: /ee loot SKYWARS 3 limits 2 2 12\nPreview does not save server configuration.',action:()=>{}});
+  cells.set(49,{name:view==='sample'?'Back to table':'Sample roll',text:'Preview only; items cannot be taken.',action:()=>choose(view==='sample'?'loot':'sample')});
+ }
+ title.textContent=header;
+ for(let i=0;i<54;i++){const c=cells.get(i);slots.append(entry(i,c?.name||'',c?.text||'',c?.action))}
+}
+chooser.onchange=()=>choose(chooser.value);
+window.addEventListener('openai:set_globals',event=>{const state=event.detail?.globals?.widgetState?.privateContent;if(state && ['browse','details','schedule','readiness','loot','sample'].includes(state.view)){view=state.view;selected=types.includes(state.selected)?state.selected:'SKYWARS';render()}});
+render();
+})();
+</script>

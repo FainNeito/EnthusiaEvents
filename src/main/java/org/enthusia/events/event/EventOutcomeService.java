@@ -49,7 +49,8 @@ public final class EventOutcomeService {
             EventType.BLOCK_PARTY,
             EventType.HOT_POTATO,
             EventType.SPLEEF,
-            EventType.SPLEGG
+            EventType.SPLEGG,
+            EventType.RUNNER
     );
 
     private final EnthusiaEventsPlugin plugin;

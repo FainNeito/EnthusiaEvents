@@ -582,7 +582,7 @@ public final class SetupWizard {
                 player.getInventory().setItem(2, tool(Material.DIAMOND_BLOCK, SetupTool.SPAWN, "team-spawn", "Team Spawn"));
                 giveTeamSelectors(player);
             }
-            case SPLEEF, SPLEGG -> {
+            case SPLEEF, SPLEGG, RUNNER -> {
                 player.getInventory().setItem(slot++, tool(Material.LIGHT_BLUE_WOOL, SetupTool.AREA_POS1, "", "Breakable Area Pos 1"));
                 player.getInventory().setItem(slot++, tool(Material.BLUE_WOOL, SetupTool.AREA_POS2, "", "Breakable Area Pos 2"));
                 player.getInventory().setItem(slot++, tool(Material.DIAMOND_SHOVEL, SetupTool.AREA, "breakable-area", "Save Breakable Area"));

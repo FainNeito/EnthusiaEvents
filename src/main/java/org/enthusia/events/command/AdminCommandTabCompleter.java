@@ -17,7 +17,7 @@ final class AdminCommandTabCompleter {
             "autostart", "disable", "enable", "enabled", "disabled", "status", "private", "invite",
             "forcestart", "simulatevote", "advance", "forcestop", "eventtp", "stop", "restore",
             "stuckcheck", "emergencyrestore", "remove", "reload", "retryrestores", "kit",
-            "resetconfigs", "resetloot", "map", "setup"
+            "resetconfigs", "resetloot", "map", "setup", "readiness", "loot", "trace", "resetarena"
     );
 
     private final MapSetupService mapSetupService;
@@ -58,7 +58,7 @@ final class AdminCommandTabCompleter {
     private List<String> completeSecondArgument(String[] args) {
         String command = args[0].toLowerCase(Locale.ROOT);
         return switch (command) {
-            case "disable", "enable", "private", "forcestart", "eventtp", "eventteleport" ->
+            case "disable", "enable", "private", "forcestart", "eventtp", "eventteleport", "readiness", "loot" ->
                     AdminCommandSupport.filter(args[1], eventTypes());
             case "invite", "restore", "stuckcheck", "emergencyrestore", "remove" -> onlinePlayers(args[1]);
             case "autostart" -> AdminCommandSupport.filter(args[1], List.of("on", "off", "status"));
@@ -69,6 +69,7 @@ final class AdminCommandTabCompleter {
 
     private List<String> completeThirdArgument(String[] args) {
         String command = args[0].toLowerCase(Locale.ROOT);
+        if (command.equals("loot")) return AdminCommandSupport.filter(args[2], List.of("1", "2", "3"));
         if (command.equals("kit") && (args[1].equalsIgnoreCase("select") || args[1].equalsIgnoreCase("override"))) {
             return AdminCommandSupport.filter(args[2], kitNames());
         }
@@ -80,6 +81,7 @@ final class AdminCommandTabCompleter {
     }
 
     private List<String> completeFourthArgument(String[] args) {
+        if (args[0].equalsIgnoreCase("loot")) return AdminCommandSupport.filter(args[3], List.of("sample", "edit", "limits"));
         if (args[0].equalsIgnoreCase("kit") && args[1].equalsIgnoreCase("override")) {
             return AdminCommandSupport.filter(args[3], kitNames());
         }
