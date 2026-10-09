@@ -15,10 +15,13 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /** Bounded background file writer; Bukkit objects never leave the server thread. */
+// This is a Paper plugin, not a J2EE web application. A daemon drains bounded string-only IO.
+@SuppressWarnings("PMD.DoNotUseThreads")
 public final class SessionTraceWriter implements AutoCloseable {
+    private static final int RECENT_LIMIT = 256;
     private final ArrayBlockingQueue<String> queue = new ArrayBlockingQueue<>(2048);
-    private final ArrayDeque<String> recent = new ArrayDeque<>();
-    private final AtomicLong dropped = new AtomicLong();
+    private final ArrayDeque<String> recentRecords = new ArrayDeque<>();
+    private final AtomicLong droppedRecords = new AtomicLong();
     private final Thread worker;
     private final Path path;
     private final Consumer<String> warning;
@@ -32,18 +35,18 @@ public final class SessionTraceWriter implements AutoCloseable {
     public void record(UUID sessionId, String event, String map, String phase, String action, UUID player) {
         String line = Instant.now() + "\t" + sessionId + "\t" + clean(event) + "\t" + clean(map)
                 + "\t" + clean(phase) + "\t" + clean(action) + "\t" + (player == null ? "-" : player);
-        synchronized (recent) {
-            if (recent.size() == 256) recent.removeFirst();
-            recent.addLast(line);
+        synchronized (recentRecords) {
+            if (recentRecords.size() == RECENT_LIMIT) recentRecords.removeFirst();
+            recentRecords.addLast(line);
         }
-        if (!queue.offer(line)) dropped.incrementAndGet();
+        if (!queue.offer(line)) droppedRecords.incrementAndGet();
     }
     public List<String> recent(UUID sessionId) {
-        synchronized (recent) {
-            return recent.stream().filter(line -> sessionId == null || line.contains("\t" + sessionId + "\t")).toList();
+        synchronized (recentRecords) {
+            return recentRecords.stream().filter(line -> sessionId == null || line.contains("\t" + sessionId + "\t")).toList();
         }
     }
-    public long dropped() { return dropped.get(); }
+    public long dropped() { return droppedRecords.get(); }
     private static String clean(String value) {
         if (value == null) return "-";
         return value.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').substring(0, Math.min(160, value.length()));
@@ -70,6 +73,6 @@ public final class SessionTraceWriter implements AutoCloseable {
         running = false;
         try { worker.join(2_000); } catch (InterruptedException exception) { Thread.currentThread().interrupt(); }
         if (worker.isAlive()) warning.accept("Session trace flush timed out");
-        if (dropped.get() > 0) warning.accept("Session trace queue dropped " + dropped.get() + " records");
+        if (droppedRecords.get() > 0) warning.accept("Session trace queue dropped " + droppedRecords.get() + " records");
     }
 }

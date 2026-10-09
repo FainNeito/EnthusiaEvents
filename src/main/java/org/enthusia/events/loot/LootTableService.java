@@ -178,16 +178,17 @@ public final class LootTableService {
         return name.endsWith("_SWORD") || name.endsWith("_AXE") || material == Material.BOW || material == Material.CROSSBOW || material == Material.TRIDENT || material == Material.MACE;
     }
     public List<ItemStack> roll(EventType type, int tier) {
+        int selectedTier = tier;
         List<LootEntry> tierEntries = entries.getOrDefault(type, Map.of()).get(tier);
         if (tierEntries == null || tierEntries.isEmpty()) {
             tierEntries = entries.getOrDefault(type, Map.of()).get(1);
-            tier = 1;
+            selectedTier = 1;
         }
         if (tierEntries == null || tierEntries.isEmpty()) {
             return List.of();
         }
         List<ItemStack> items = new ArrayList<>();
-        var limits = cachedLimits.getOrDefault(type, Map.of()).getOrDefault(tier,
+        var limits = cachedLimits.getOrDefault(type, Map.of()).getOrDefault(selectedTier,
                 new org.enthusia.events.domain.LootLimits(0, 0, 0));
         int armorCount = 0, weaponCount = 0;
         var shuffled = new ArrayList<>(tierEntries);

@@ -29,24 +29,35 @@ public final class CaptureAttackListener implements Listener {
         // Respect cancellation of an otherwise valid attack by earlier listeners.
         if (event.willAttack() && event.isCancelled()) return;
         EventSession session = manager.session();
-        if (session == null || session.phase() != EventPhase.ACTIVE
-                || session.definition().type() != EventType.CAPTURE_PLAYERS
+        if (!activeCapture(session)
                 || !(event.getAttacked() instanceof Player captive)) return;
         UUID carrierId = carrierOf.apply(captive.getUniqueId());
         if (carrierId == null) return;
         event.setCancelled(true); // A captive is never the combat target.
         Player attacker = event.getPlayer();
         Player carrier = Bukkit.getPlayer(carrierId);
-        if (carrier == null || !carrier.isOnline()
-                || !session.participants().contains(attacker.getUniqueId())
-                || !session.participants().contains(carrierId)
-                || attacker.getGameMode() == org.bukkit.GameMode.SPECTATOR
-                || attacker.equals(carrier)
-                || !attacker.getWorld().equals(carrier.getWorld())
-                || attacker.getLocation().distanceSquared(carrier.getLocation()) > 16.0D
-                || !attacker.hasLineOfSight(carrier)) return;
+        if (!eligibleParticipants(session, attacker, carrier)) return;
+        if (!reachable(attacker, carrier)) return;
         // Friendly fire, prisoner/rescue-carrier restrictions and lethal capture
         // remain authoritative in EventGameplayListener for the forwarded attack.
         attacker.attack(carrier);
+    }
+
+    private boolean activeCapture(EventSession session) {
+        return session != null && session.phase() == EventPhase.ACTIVE
+                && session.definition().type() == EventType.CAPTURE_PLAYERS;
+    }
+
+    private boolean eligibleParticipants(EventSession session, Player attacker, Player carrier) {
+        return carrier != null && carrier.isOnline()
+                && session.participants().contains(attacker.getUniqueId())
+                && session.participants().contains(carrier.getUniqueId())
+                && attacker.getGameMode() != org.bukkit.GameMode.SPECTATOR && !attacker.equals(carrier);
+    }
+
+    private boolean reachable(Player attacker, Player carrier) {
+        return attacker.getWorld().equals(carrier.getWorld())
+                && attacker.getLocation().distanceSquared(carrier.getLocation()) <= 16.0D
+                && attacker.hasLineOfSight(carrier);
     }
 }

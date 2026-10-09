@@ -43,11 +43,11 @@ public final class ArenaResetService implements Listener {
         this.eventManager = eventManager;
     }
 
-    private String failure;
+    private String lastFailure = "";
 
     public boolean isResetting() { return resetTask != null || !pendingRestore.isEmpty(); }
     public int pendingBlocks() { return pendingRestore.size(); }
-    public String failure() { return failure; }
+    public String failure() { return lastFailure.isEmpty() ? null : lastFailure; }
 
     public void reset() {
         if (resetTask != null) return;
@@ -57,7 +57,7 @@ public final class ArenaResetService implements Listener {
             originalStates.clear();
         }
         if (pendingRestore.isEmpty()) return;
-        failure = null;
+        lastFailure = "";
         int synchronousLimit = Math.max(0, plugin.getConfig().getInt("reset.max-blocks-per-session", 50_000));
         if (pendingRestore.size() <= synchronousLimit) {
             restoreBatch(pendingRestore.size());
@@ -74,16 +74,16 @@ public final class ArenaResetService implements Listener {
                 if (!state.update(true, false)) throw new IllegalStateException("BlockState.update returned false");
                 pendingRestore.removeFirst();
             } catch (RuntimeException exception) {
-                failure = exception.getClass().getSimpleName() + ": " + exception.getMessage();
+                lastFailure = exception.getClass().getSimpleName() + ": " + exception.getMessage();
                 cancelResetTask();
                 plugin.getLogger().severe("Arena reset paused with " + pendingRestore.size()
-                        + " blocks retained. New events are blocked. Retry with /ee resetarena. " + failure);
+                        + " blocks retained. New events are blocked. Retry with /ee resetarena. " + lastFailure);
                 return;
             }
         }
         if (pendingRestore.isEmpty()) {
             cancelResetTask();
-            plugin.trace(eventManager.session(), "arena-reset-complete", null);
+            plugin.recordSessionEvidence(eventManager.session(), "arena-reset-complete", null);
         }
     }
 
@@ -97,14 +97,14 @@ public final class ArenaResetService implements Listener {
         cancelResetTask();
         pendingRestore.addAll(originalStates.values().stream().toList().reversed());
         originalStates.clear();
-        failure = null;
+        lastFailure = "";
         restoreBatch(pendingRestore.size());
     }
 
     public void clear() {
         if (isResetting() || !originalStates.isEmpty())
             throw new IllegalStateException("Cannot discard unrestored arena states");
-        failure = null;
+        lastFailure = "";
     }
 
     public void recordBlock(Block block) {

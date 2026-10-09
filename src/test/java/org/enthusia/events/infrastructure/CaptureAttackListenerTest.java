@@ -27,9 +27,10 @@ class CaptureAttackListenerTest {
         EventManager manager = mock(EventManager.class);
         Player attacker = player(), captive = player(), carrier = player();
         World world = mock(World.class);
+        Location samePosition = new Location(world, 0, 70, 0);
         for (Player player : List.of(attacker, captive, carrier)) {
             when(player.getWorld()).thenReturn(world);
-            when(player.getLocation()).thenReturn(new Location(world, 0, 70, 0));
+            when(player.getLocation()).thenReturn(samePosition);
         }
         when(attacker.hasLineOfSight(carrier)).thenReturn(true);
         EventSession session = session();

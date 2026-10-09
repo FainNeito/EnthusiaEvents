@@ -14,3 +14,10 @@ SPEAR order: spec -> prove -> engine -> arch -> refine. No project-local EARS/st
 Draft PR #15 is open in wsg138/EnthusiaEvents. Initial implementation head `a4fc9b3` has local clean verification. Hosted Quality run `37880807816` is `action_required`; CodeRabbit skipped the draft, and no review submissions/threads were present at inspection. Maintainer CI approval and independent review remain delivery gates, not passing checks.
 
 Runtime acceptance: carrier targeting/armor rendering on Java and Bedrock, full donor matches, staging reset cost and artifact activation are separate remaining gates. No production mutation authorized.
+
+## Follow-up 2026-10-09
+
+- [ ] Review all 39 Codacy findings and correct applicable maintainability issues; document narrowly scoped false-positive/test-fixture exceptions.
+- [ ] Enable ready-for-review status and inspect the resulting CodeRabbit review.
+- [ ] Re-run canonical verification after refinement and inspect exact-head checks.
+- [ ] Prepare an isolated TEST playtest plan with rollback, fixture setup and explicit client acceptance evidence.

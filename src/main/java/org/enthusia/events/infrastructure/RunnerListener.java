@@ -20,13 +20,27 @@ public final class RunnerListener implements Listener {
     public void move(PlayerMoveEvent event) {
         EventSession session = manager.session();
         if (tracked != session) { pending.clear(); tracked = session; }
-        if (session == null || session.phase() != EventPhase.ACTIVE || session.definition().type() != EventType.RUNNER
-                || !session.participants().contains(event.getPlayer().getUniqueId()) || event.getTo() == null) return;
+        if (!activeParticipant(session, event) || event.getTo() == null) return;
         EventMap map = session.selectedMap();
         if (map == null || map.region() == null) return;
         var floor = map.areas().get("breakable-area");
         var block = event.getTo().clone().subtract(0, 1, 0).getBlock();
-        if (floor == null || !floor.contains(block.getLocation()) || !map.region().contains(block.getLocation()) || block.isEmpty()) return;
+        if (!eligibleFloor(map, floor, block)) return;
+        scheduleRemoval(session, block);
+    }
+
+    private boolean activeParticipant(EventSession session, PlayerMoveEvent event) {
+        return session != null && session.phase() == EventPhase.ACTIVE
+                && session.definition().type() == EventType.RUNNER
+                && session.participants().contains(event.getPlayer().getUniqueId());
+    }
+
+    private boolean eligibleFloor(EventMap map, CuboidRegion floor, org.bukkit.block.Block block) {
+        return floor != null && floor.contains(block.getLocation())
+                && map.region().contains(block.getLocation()) && !block.isEmpty();
+    }
+
+    private void scheduleRemoval(EventSession session, org.bukkit.block.Block block) {
         String key = block.getWorld().getUID() + ":" + block.getX() + ":" + block.getY() + ":" + block.getZ();
         if (!pending.add(key)) return;
         var data = block.getBlockData().clone();

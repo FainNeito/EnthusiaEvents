@@ -2595,7 +2595,7 @@ public final class EventGameplayListener implements Listener {
                 prisoner.leaveVehicle();
                 if (!mount.addPassenger(prisoner)) {
                     restoreCapturePlayerState(prisoner);
-                    plugin.trace(eventManager.session(), "capture-mount-rejected", entry.prisonerId());
+                    plugin.recordSessionEvidence(eventManager.session(), "capture-mount-rejected", entry.prisonerId());
                     continue;
                 }
                 mounted.add(entry.prisonerId());

@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+// Test-only inspection of legacy private state; do not widen the production API for fixtures.
+@SuppressWarnings("PMD.AvoidAccessibilityAlteration")
 class BracketLeaveTest {
     @SuppressWarnings("unchecked")
     @Test void voluntaryExitForfeitsCurrentSoloMatchAndQueuesOpponent() throws Exception {

@@ -49,7 +49,7 @@ public final class EnthusiaEventsPlugin extends JavaPlugin {
 
     private org.enthusia.events.infrastructure.SessionTraceWriter traceWriter;
     public org.enthusia.events.infrastructure.SessionTraceWriter traceWriter() { return traceWriter; }
-    public void trace(org.enthusia.events.event.EventSession session, String action, java.util.UUID player) {
+    public void recordSessionEvidence(org.enthusia.events.event.EventSession session, String action, java.util.UUID player) {
         if (traceWriter == null || session == null) return;
         traceWriter.record(session.id(), session.definition().type().name(),
                 session.selectedMap() == null ? "-" : session.selectedMap().id(), session.phase().name(), action, player);

@@ -10,6 +10,8 @@ import java.util.logging.Logger;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+// Test-only inspection of legacy private state; do not widen the production API for fixtures.
+@SuppressWarnings("PMD.AvoidAccessibilityAlteration")
 class ArenaResetFailureTest {
     @SuppressWarnings("unchecked")
     private ArenaResetService tracked(EnthusiaEventsPlugin plugin, EventManager manager, BlockState... states) throws Exception {

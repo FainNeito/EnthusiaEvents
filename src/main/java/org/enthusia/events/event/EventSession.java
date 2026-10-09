@@ -14,9 +14,9 @@ import java.util.UUID;
 public final class EventSession {
 
     private final UUID sessionId = UUID.randomUUID();
-    private java.util.function.Consumer<EventPhase> phaseObserver = ignored -> {};
+    private java.util.function.Consumer<EventPhase> phaseListener = ignored -> {};
     public UUID id() { return sessionId; }
-    public void phaseObserver(java.util.function.Consumer<EventPhase> observer) { phaseObserver = observer; }
+    public void phaseObserver(java.util.function.Consumer<EventPhase> observer) { phaseListener = observer; }
     private EventDefinition currentDefinition;
     private final Set<UUID> participantIds = new LinkedHashSet<>();
     private final Set<UUID> spectatorIds = new LinkedHashSet<>();
@@ -64,7 +64,7 @@ public final class EventSession {
     public void phase(EventPhase phase) {
         if (currentPhase == phase) return;
         this.currentPhase = phase;
-        phaseObserver.accept(phase);
+        phaseListener.accept(phase);
     }
 
     public Location waitingHub() {

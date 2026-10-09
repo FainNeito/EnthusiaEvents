@@ -41,3 +41,11 @@ Before release, verify merge/commit, canonical clean build, monorepo dependency 
 4. Staff tooling: revoked permission, full/missing-map pages, loot metadata, invalid numbers, edits blocked mid-event, sample counts and real probability/cap balance. Configure caps deliberately; zero retains legacy unlimited behavior.
 5. Runner private match: floor bounds, jump/standstill behavior, last survivor, timeout, late tasks, block restoration, original inventories and restart/stop recovery. Keep it out of public rotation until accepted.
 6. Logs: session IDs/phases, failed and successful restores, reset status, unwritable/rotated files and shutdown flush. No inventory contents or secrets.
+
+## Refinement 2026-10-09
+
+Fetched authoritative main again; base is unchanged. PR #15 is now ready for review. Codacy reported 39 issues: eight complexity findings, naming/literal/parameter style findings, six logger/per-loop heuristics, six test reflection findings and two J2EE thread findings. Split capture eligibility/reach, Runner floor eligibility/scheduling, command dispatch/editing and inventory navigation/rendering into smaller methods. Named slot/argument constants and renamed backing fields; page/tier parameters are no longer reassigned.
+
+The trace API is named `recordSessionEvidence`, accurately describing the bounded persistent diagnostics rather than a severity-controlled logger. No log-level guard may discard this evidence. Test fixture reflection has a rule-specific exception with its rationale; widening legacy private production state for tests would weaken encapsulation. The daemon file writer has a rule-specific J2EE exception: this application is a Paper plugin, not a managed web application, and the worker handles strings/file IO only. No global quality threshold was relaxed.
+
+Canonical clean verify after refinement passed all 28 tests and configured PMD. Interface behavior/menu appearance is unchanged; the existing interactive preview remains applicable. Current GitHub credential permissions were checked: upstream push/maintain/admin are false, so workflow approval cannot be performed by this account. Hosted checks and code review remain separate from the passing local build. The detailed isolated TEST procedure is in playtest.md; its runtime cases remain pending until actually executed.

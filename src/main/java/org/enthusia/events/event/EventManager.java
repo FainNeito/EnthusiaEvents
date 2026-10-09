@@ -509,7 +509,7 @@ public final class EventManager {
             return false;
         }
         boolean wasParticipant = session.participants().remove(player.getUniqueId());
-        plugin.trace(session, "departure", player.getUniqueId());
+        plugin.recordSessionEvidence(session, "departure", player.getUniqueId());
         gameplayPlayerLeave.accept(player);
         session.spectators().remove(player.getUniqueId());
         playerVotes.remove(player.getUniqueId());
@@ -703,7 +703,7 @@ public final class EventManager {
             return;
         }
         boolean wasParticipant = session.participants().remove(player.getUniqueId());
-        plugin.trace(session, "departure", player.getUniqueId());
+        plugin.recordSessionEvidence(session, "departure", player.getUniqueId());
         gameplayPlayerLeave.accept(player);
         session.spectators().remove(player.getUniqueId());
         playerVotes.remove(player.getUniqueId());
@@ -827,8 +827,8 @@ public final class EventManager {
 
     private EventSession newSession(EventDefinition definition, EventPhase phase) {
         EventSession created = new EventSession(definition, phase);
-        created.phaseObserver(next -> plugin.trace(created, "phase", null));
-        plugin.trace(created, "created", null);
+        created.phaseObserver(next -> plugin.recordSessionEvidence(created, "phase", null));
+        plugin.recordSessionEvidence(created, "created", null);
         return created;
     }
 
@@ -868,7 +868,7 @@ public final class EventManager {
         }
         if (arenaResetService != null) {
             arenaResetService.reset();
-            plugin.trace(session, "arena-reset pending=" + arenaResetService.pendingBlocks(), null);
+            plugin.recordSessionEvidence(session, "arena-reset pending=" + arenaResetService.pendingBlocks(), null);
         }
         if (podiumService != null) {
             podiumService.show(rankedPlayers);
@@ -1580,7 +1580,7 @@ public final class EventManager {
             return;
         }
         EventSession finished = session;
-        plugin.trace(finished, "finished participants=" + finished.participants().size(), null);
+        plugin.recordSessionEvidence(finished, "finished participants=" + finished.participants().size(), null);
         if (!finished.finalRankings().isEmpty()) {
             payWinner(finished);
         }
@@ -1664,7 +1664,7 @@ public final class EventManager {
         }
         EventSession restoringSession = session;
         return snapshotService.restore(player, consumeSnapshot).thenApply(restored -> {
-            plugin.trace(restoringSession, restored ? "restore-success" : "restore-failed", uuid);
+            plugin.recordSessionEvidence(restoringSession, restored ? "restore-success" : "restore-failed", uuid);
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (restored) {
                     restoreScoreboard(player);
@@ -2603,7 +2603,7 @@ public final class EventManager {
         gameplayRuntimeReset.run();
         if (arenaResetService != null) {
             arenaResetService.reset();
-            plugin.trace(session, "arena-reset pending=" + arenaResetService.pendingBlocks(), null);
+            plugin.recordSessionEvidence(session, "arena-reset pending=" + arenaResetService.pendingBlocks(), null);
         }
         if (session != null && session.definition().type() == EventType.BLOCK_PARTY) {
             prepareBlockPartyFloor(session.selectedMap());

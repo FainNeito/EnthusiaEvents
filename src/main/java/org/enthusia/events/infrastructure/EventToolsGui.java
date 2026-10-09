@@ -18,14 +18,18 @@ import java.util.*;
 
 /** Read-only inventory views. Persistent edits use explicit validated staff commands. */
 public final class EventToolsGui implements Listener {
+    private static final int CONTENT_SLOTS = 45;
+    private static final int ACTION_SLOT = 49;
+    private static final int NEXT_SLOT = 53;
+    private static final int READINESS_SLOT = 31;
     private final EnthusiaEventsPlugin plugin;
     private final EventManager manager;
     private final MapSetupService maps;
     private final EventConfigService settings;
-    private final LootTableService loot;
+    private final LootTableService lootTables;
     public EventToolsGui(EnthusiaEventsPlugin plugin, EventManager manager, MapSetupService maps,
                          EventConfigService settings, LootTableService loot) {
-        this.plugin = plugin; this.manager = manager; this.maps = maps; this.settings = settings; this.loot = loot;
+        this.plugin = plugin; this.manager = manager; this.maps = maps; this.settings = settings; this.lootTables = loot;
     }
     private record View(String kind, EventType type, int tier, int page) implements InventoryHolder {
         @Override public Inventory getInventory() { return null; }
@@ -54,7 +58,7 @@ public final class EventToolsGui implements Listener {
                     "Duration: " + settings.activePhaseSeconds(type, 300) + " seconds",
                     "Winner reward: " + settings.winnerReward(type, 100), "Click for details")));
         }
-        inv.setItem(49, item(Material.CLOCK, "Schedule", List.of(scheduleLabel(), "Click to inspect schedule")));
+        inv.setItem(ACTION_SLOT, item(Material.CLOCK, "Schedule", List.of(scheduleLabel(), "Click to inspect schedule")));
         player.openInventory(inv);
     }
     public String scheduleLabel() {
@@ -67,7 +71,7 @@ public final class EventToolsGui implements Listener {
                 "A vote chooses an event; this is not a guaranteed start.", "Minimum players and map readiness still apply.")));
         back(inv); player.openInventory(inv);
     }
-    private void back(Inventory inv) { inv.setItem(49, item(Material.ARROW, "Browse events", List.of("Click to return"))); }
+    private void back(Inventory inv) { inv.setItem(ACTION_SLOT, item(Material.ARROW, "Browse events", List.of("Click to return"))); }
     public void details(Player player, EventType type) {
         Inventory inv = inventory(new View("details", type, 0, 0), "Events • " + type.name());
         inv.setItem(22, item(settings.icon(type), type.name(), List.of(settings.description(type),
@@ -75,64 +79,72 @@ public final class EventToolsGui implements Listener {
                 "Minimum / ready: " + settings.minPlayers(type, 2) + " / " + settings.readyPlayers(type, 2),
                 "Use /event start " + type + " to request a start.")));
         if (player.hasPermission("enthusia.events.admin"))
-            inv.setItem(31, item(Material.COMPARATOR, "Staff readiness", List.of("Click to inspect saved map validation")));
+            inv.setItem(READINESS_SLOT, item(Material.COMPARATOR, "Staff readiness", List.of("Click to inspect saved map validation")));
         back(inv); player.openInventory(inv);
     }
     public void readiness(Player player, EventType type, int page) {
         if (!player.hasPermission("enthusia.events.admin")) return;
         List<EventMap> list = maps.mapsFor(type);
-        int maxPage = Math.max(0, (list.size() - 1) / 45);
-        page = Math.max(0, Math.min(page, maxPage));
-        Inventory inv = inventory(new View("readiness", type, 0, page), "Readiness • " + type.name());
-        for (int i = page * 45; i < Math.min(list.size(), page * 45 + 45); i++) {
+        int maxPage = Math.max(0, (list.size() - 1) / CONTENT_SLOTS);
+        int selectedPage = Math.max(0, Math.min(page, maxPage));
+        Inventory inv = inventory(new View("readiness", type, 0, selectedPage), "Readiness • " + type.name());
+        for (int i = selectedPage * CONTENT_SLOTS; i < Math.min(list.size(), selectedPage * CONTENT_SLOTS + CONTENT_SLOTS); i++) {
             EventMap map = list.get(i);
-            List<String> errors = maps.validate(map);
-            var lines = new ArrayList<String>();
-            lines.add(errors.isEmpty() ? "Ready" : "Needs setup");
-            lines.add("World: " + map.worldName());
-            lines.add("Spawns: " + String.join(", ", map.spawns().keySet()));
-            lines.add("Areas: " + String.join(", ", map.areas().keySet()));
-            lines.add("Points: " + String.join(", ", map.points().keySet()));
-            lines.add("Chests by tier: " + map.chests().entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue().size()).toList());
-            lines.add("Generators: " + map.generators().keySet());
-            lines.add("Checkpoints: " + map.checkpoints().keySet());
-            lines.add("Region: " + (map.region() == null ? "missing" : map.region().minX() + "," + map.region().minY() + "," + map.region().minZ()
-                    + " to " + map.region().maxX() + "," + map.region().maxY() + "," + map.region().maxZ()));
-            lines.addAll(errors);
-            lines.add("Repair: /ee setup " + type + " " + map.id());
-            lines.add("Inspect commands: /ee map help");
-            inv.setItem(i % 45, item(errors.isEmpty() ? Material.LIME_DYE : Material.RED_DYE, map.id(), lines));
+            inv.setItem(i % CONTENT_SLOTS, readinessItem(map, type));
         }
         if (list.isEmpty()) inv.setItem(22, item(Material.BARRIER, "No saved maps", List.of("Create with /ee map create " + type + " <mapId>.")));
-        pagination(inv, page, maxPage); player.openInventory(inv);
+        pagination(inv, selectedPage, maxPage); player.openInventory(inv);
+    }
+    private ItemStack readinessItem(EventMap map, EventType type) {
+        List<String> errors = maps.validate(map);
+        var lines = new ArrayList<String>();
+        lines.add(errors.isEmpty() ? "Ready" : "Needs setup");
+        lines.add("World: " + map.worldName());
+        lines.add("Spawns: " + String.join(", ", map.spawns().keySet()));
+        lines.add("Areas: " + String.join(", ", map.areas().keySet()));
+        lines.add("Points: " + String.join(", ", map.points().keySet()));
+        lines.add("Chests by tier: " + map.chests().entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue().size()).toList());
+        lines.add("Generators: " + map.generators().keySet());
+        lines.add("Checkpoints: " + map.checkpoints().keySet());
+        lines.add("Region: " + (map.region() == null ? "missing" : map.region().minX() + "," + map.region().minY() + "," + map.region().minZ()
+                + " to " + map.region().maxX() + "," + map.region().maxY() + "," + map.region().maxZ()));
+        lines.addAll(errors);
+        lines.add("Repair: /ee setup " + type + " " + map.id());
+        lines.add("Inspect commands: /ee map help");
+        return item(errors.isEmpty() ? Material.LIME_DYE : Material.RED_DYE, map.id(), lines);
     }
     public void loot(Player player, EventType type, int tier, int page, boolean sample) {
         if (!player.hasPermission("enthusia.events.admin")) return;
-        var entries = loot.inspect(type, tier);
-        int maxPage = sample ? 0 : Math.max(0, (entries.size() - 1) / 45);
-        page = Math.max(0, Math.min(page, maxPage));
-        Inventory inv = inventory(new View(sample ? "sample" : "loot", type, tier, page),
+        var entries = lootTables.inspect(type, tier);
+        int maxPage = sample ? 0 : Math.max(0, (entries.size() - 1) / CONTENT_SLOTS);
+        int selectedPage = Math.max(0, Math.min(page, maxPage));
+        Inventory inv = inventory(new View(sample ? "sample" : "loot", type, tier, selectedPage),
                 (sample ? "Sample • " : "Loot • ") + type + " " + tier);
-        if (sample) {
-            var rolled = loot.roll(type, tier);
-            for (int i = 0; i < Math.min(45, rolled.size()); i++) inv.setItem(i, rolled.get(i));
-            inv.setItem(47, item(Material.PAPER, "Rolled entries: " + rolled.size(),
-                    List.of("Showing the first " + Math.min(45, rolled.size()) + " entries.", "Sample only; no inventory transfer.")));
-        } else for (int i = page * 45; i < Math.min(entries.size(), page * 45 + 45); i++) {
+        if (sample) fillSample(inv, type, tier);
+        else fillLootTable(inv, entries, type, tier, selectedPage);
+        var caps = lootTables.limits(type, tier);
+        inv.setItem(48, item(Material.COMPARATOR, "Limits (0 = unlimited)", List.of("Armor: " + caps.maxArmor(),
+                "Weapons: " + caps.maxWeapons(), "Total entries: " + caps.maxTotal(), "Edits blocked during events.")));
+        inv.setItem(ACTION_SLOT, item(Material.CHEST, sample ? "Back to table" : "Sample roll", List.of("Preview only; items cannot be taken.")));
+        pagination(inv, selectedPage, maxPage); player.openInventory(inv);
+    }
+    private void fillSample(Inventory inv, EventType type, int tier) {
+        var rolled = lootTables.roll(type, tier);
+        for (int i = 0; i < Math.min(CONTENT_SLOTS, rolled.size()); i++) inv.setItem(i, rolled.get(i));
+        inv.setItem(47, item(Material.PAPER, "Rolled entries: " + rolled.size(),
+                List.of("Showing the first " + Math.min(CONTENT_SLOTS, rolled.size()) + " entries.", "Sample only; no inventory transfer.")));
+    }
+    private void fillLootTable(Inventory inv, List<LootTableService.EntryView> entries, EventType type, int tier, int page) {
+        for (int i = page * CONTENT_SLOTS; i < Math.min(entries.size(), page * CONTENT_SLOTS + CONTENT_SLOTS); i++) {
             var entry = entries.get(i);
-            inv.setItem(i % 45, item(entry.material(), entry.id(), List.of(
+            inv.setItem(i % CONTENT_SLOTS, item(entry.material(), entry.id(), List.of(
                     "Amount: " + entry.min() + "–" + entry.max(), "Chance: " + Math.round(entry.chance() * 100) + "%",
                     "Edit: /ee loot " + type + " " + tier + " edit " + entry.id() + " <min> <max> <chance>")));
         }
-        var caps = loot.limits(type, tier);
-        inv.setItem(48, item(Material.COMPARATOR, "Limits (0 = unlimited)", List.of("Armor: " + caps.maxArmor(),
-                "Weapons: " + caps.maxWeapons(), "Total entries: " + caps.maxTotal(), "Edits blocked during events.")));
-        inv.setItem(49, item(Material.CHEST, sample ? "Back to table" : "Sample roll", List.of("Preview only; items cannot be taken.")));
-        pagination(inv, page, maxPage); player.openInventory(inv);
     }
     private void pagination(Inventory inv, int page, int max) {
-        if (page > 0) inv.setItem(45, item(Material.ARROW, "Previous", List.of("Click")));
-        if (page < max) inv.setItem(53, item(Material.ARROW, "Next", List.of("Click")));
+        if (page > 0) inv.setItem(CONTENT_SLOTS, item(Material.ARROW, "Previous", List.of("Click")));
+        if (page < max) inv.setItem(NEXT_SLOT, item(Material.ARROW, "Next", List.of("Click")));
     }
     @EventHandler public void click(InventoryClickEvent event) {
         if (!(event.getView().getTopInventory().getHolder() instanceof View view)) return;
@@ -144,16 +156,28 @@ public final class EventToolsGui implements Listener {
     }
     private void navigate(Player player, View view, int slot) {
         if (!player.isOnline()) return;
-        if (view.kind.equals("browse")) {
-            if (slot < EventType.values().length) details(player, EventType.values()[slot]);
-            else if (slot == 49) schedule(player);
-        } else if (view.kind.equals("loot") || view.kind.equals("sample")) {
-            if (slot == 49) loot(player, view.type, view.tier, 0, view.kind.equals("loot"));
-            else if (slot == 45 || slot == 53) loot(player, view.type, view.tier, view.page + (slot == 45 ? -1 : 1), false);
-        } else if (view.kind.equals("readiness")) {
-            if (slot == 45 || slot == 53) readiness(player, view.type, view.page + (slot == 45 ? -1 : 1));
-        } else if (slot == 31 && view.kind.equals("details")) readiness(player, view.type, 0);
-        else if (slot == 49) browse(player);
+        switch (view.kind) {
+            case "browse" -> navigateBrowse(player, slot);
+            case "loot", "sample" -> navigateLoot(player, view, slot);
+            case "readiness" -> {
+                if (isPageSlot(slot)) readiness(player, view.type, nextPage(view, slot));
+            }
+            default -> navigateDetails(player, view, slot);
+        }
+    }
+    private boolean isPageSlot(int slot) { return slot == CONTENT_SLOTS || slot == NEXT_SLOT; }
+    private int nextPage(View view, int slot) { return view.page + (slot == CONTENT_SLOTS ? -1 : 1); }
+    private void navigateBrowse(Player player, int slot) {
+        if (slot < EventType.values().length) details(player, EventType.values()[slot]);
+        else if (slot == ACTION_SLOT) schedule(player);
+    }
+    private void navigateLoot(Player player, View view, int slot) {
+        if (slot == ACTION_SLOT) loot(player, view.type, view.tier, 0, view.kind.equals("loot"));
+        else if (isPageSlot(slot)) loot(player, view.type, view.tier, nextPage(view, slot), false);
+    }
+    private void navigateDetails(Player player, View view, int slot) {
+        if (slot == READINESS_SLOT && view.kind.equals("details")) readiness(player, view.type, 0);
+        else if (slot == ACTION_SLOT) browse(player);
     }
     @EventHandler public void drag(InventoryDragEvent event) {
         if (event.getView().getTopInventory().getHolder() instanceof View) event.setCancelled(true);

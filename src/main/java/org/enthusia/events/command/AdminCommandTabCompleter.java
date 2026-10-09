@@ -13,11 +13,12 @@ import java.util.Locale;
 
 final class AdminCommandTabCompleter {
 
+    private static final String LOOT_COMMAND = "loot";
     private static final List<String> ROOT_COMMANDS = List.of(
             "autostart", "disable", "enable", "enabled", "disabled", "status", "private", "invite",
             "forcestart", "simulatevote", "advance", "forcestop", "eventtp", "stop", "restore",
             "stuckcheck", "emergencyrestore", "remove", "reload", "retryrestores", "kit",
-            "resetconfigs", "resetloot", "map", "setup", "readiness", "loot", "trace", "resetarena"
+            "resetconfigs", "resetloot", "map", "setup", "readiness", LOOT_COMMAND, "trace", "resetarena"
     );
 
     private final MapSetupService mapSetupService;
@@ -81,7 +82,7 @@ final class AdminCommandTabCompleter {
     }
 
     private List<String> completeFourthArgument(String[] args) {
-        if (args[0].equalsIgnoreCase("loot")) return AdminCommandSupport.filter(args[3], List.of("sample", "edit", "limits"));
+        if (args[0].equalsIgnoreCase(LOOT_COMMAND)) return AdminCommandSupport.filter(args[3], List.of("sample", "edit", "limits"));
         if (args[0].equalsIgnoreCase("kit") && args[1].equalsIgnoreCase("override")) {
             return AdminCommandSupport.filter(args[3], kitNames());
         }
