@@ -9,7 +9,7 @@ SPEAR state: SPEC and source-derived PROVE preparation complete; ENGINE deferred
 - [x] Specify bounded preflight, Speedbuilders scoring/phases and seasonal credit/grant boundaries.
 - [x] Record meaningful future proof cases without running them.
 - [x] Save and inspect the interactive proposal and remote delivery receipt.
-- [ ] Push a separate planning PR and inspect exact-head status (delivery record records the final receipt).
+- [x] Push separate draft [PR #16](https://github.com/wsg138/EnthusiaEvents/pull/16) and inspect exact-head status; final delivery record distinguishes automatic hosted checks from paused plugin proof.
 
 ## After the testing hold is lifted
 
