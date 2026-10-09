@@ -132,6 +132,8 @@ public final class MapSetupService {
                 errors.add("at least one BedWars upgrade shop is required");
             }
         }
+        if (map.eventType() == EventType.RUNNER && !map.areas().containsKey("breakable-area"))
+            errors.add("Runner breakable-area is required; use /ee setup <EVENT> <mapId> area breakable-area");
         if (map.eventType() == EventType.BLOCK_PARTY && !map.areas().containsKey("color-floor")) {
             errors.add("block party color floor area is required");
         }

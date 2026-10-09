@@ -13,7 +13,6 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.inventory.InventoryType;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -25,7 +24,7 @@ import java.util.UUID;
 
 /**
  * Production guardrails for event transitions that are difficult for individual game
- * modules to own safely: bracket withdrawals, persistent inventory escape, BedWars void
+ * modules to own safely: persistent inventory escape, BedWars void
  * deaths, and CTF armor consistency.
  */
 public final class EventGameplaySafetyListener implements Listener {
@@ -39,43 +38,6 @@ public final class EventGameplaySafetyListener implements Listener {
     public EventGameplaySafetyListener(EnthusiaEventsPlugin plugin, EventManager eventManager) {
         this.plugin = plugin;
         this.eventManager = eventManager;
-    }
-
-    /**
-     * A bracket participant who voluntarily leaves/spectates must be removed from the
-     * bracket queues exactly like a disconnect. The normal command then completes either
-     * snapshot restore (/leave) or spectator placement (/spectate).
-     */
-    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
-    public void onEventExitCommand(PlayerCommandPreprocessEvent event) {
-        EventSession session = eventManager.session();
-        Player player = event.getPlayer();
-        if (session == null || session.phase() != EventPhase.ACTIVE || !eventManager.isBracketEvent()
-                || !session.participants().contains(player.getUniqueId())) {
-            return;
-        }
-
-        String commandLine = commandLine(event.getMessage());
-        if (commandLine.isBlank()) {
-            return;
-        }
-        String[] parts = commandLine.split("\\s+");
-        if (parts.length < 2) {
-            return;
-        }
-        String root = stripNamespace(parts[0]);
-        String subcommand = parts[1].toLowerCase(Locale.ROOT);
-        if (!(root.equals("event") || root.equals("ee"))
-                || !(subcommand.equals("leave") || subcommand.equals("spectate"))) {
-            return;
-        }
-
-        boolean keepAsSpectator = subcommand.equals("spectate");
-        UUID uuid = player.getUniqueId();
-        eventManager.handleQuit(player);
-        if (keepAsSpectator && eventManager.session() == session) {
-            session.spectators().add(uuid);
-        }
     }
 
     /**
@@ -246,19 +208,6 @@ public final class EventGameplaySafetyListener implements Listener {
             case "7", "cyan" -> Color.fromRGB(0, 255, 255);
             default -> Color.fromRGB(255, 255, 255);
         };
-    }
-
-    private String commandLine(String raw) {
-        if (raw == null || raw.length() <= 1) {
-            return "";
-        }
-        return raw.substring(1).trim();
-    }
-
-    private String stripNamespace(String root) {
-        String normalized = root.toLowerCase(Locale.ROOT);
-        int colon = normalized.lastIndexOf(':');
-        return colon >= 0 ? normalized.substring(colon + 1) : normalized;
     }
 
     private enum EquipmentPiece {

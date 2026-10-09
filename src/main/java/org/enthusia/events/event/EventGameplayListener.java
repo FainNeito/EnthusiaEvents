@@ -1022,6 +1022,7 @@ public final class EventGameplayListener implements Listener {
                 || type == EventType.FIGHT_FFA
                 || type == EventType.SPLEEF
                 || type == EventType.SPLEGG
+                || type == EventType.RUNNER
                 || type == EventType.HOT_POTATO;
     }
 
@@ -1331,20 +1332,49 @@ public final class EventGameplayListener implements Listener {
         trackedSession = null;
     }
 
-    private void clearCapturePlayersState() {
-        for (UUID carrierId : List.copyOf(capturePlayerStacks.keySet())) {
-            Player carrier = Bukkit.getPlayer(carrierId);
-            if (carrier != null) {
-                carrier.eject();
-            }
+    public UUID captureCarrier(UUID captive) { return capturePlayerCarrierByPrisoner.get(captive); }
+
+    public void handleCapturePlayerDeparture(Player player) {
+        EventSession session = eventManager.session();
+        if (session == null || session.definition().type() != EventType.CAPTURE_PLAYERS) return;
+        UUID id = player.getUniqueId();
+        clearCapturePlayersProgress(id);
+        if (!capturePlayerStacks.containsKey(id) && !capturePlayerCarrierByPrisoner.containsKey(id)
+                && !capturePlayerJails.containsKey(id)) return;
+        UUID carrier = capturePlayerCarrierByPrisoner.remove(id);
+        if (carrier != null) {
+            List<CapturePlayersCarryEntry> stack = capturePlayerStacks.get(carrier);
+            if (stack != null) stack.removeIf(entry -> entry.prisonerId().equals(id));
+            player.leaveVehicle();
+            rebuildCapturePlayersStack(carrier);
         }
-        for (UUID prisonerId : List.copyOf(capturePlayerCarrierByPrisoner.keySet())) {
-            Player prisoner = Bukkit.getPlayer(prisonerId);
+        if (session.selectedMap() != null) releaseCapturePlayersStack(session, session.selectedMap(), player, true);
+        else dismountCapturePlayersStack(id);
+        capturePlayerJails.remove(id);
+        clearCapturePlayersProgress(id);
+        restoreCapturePlayerState(player);
+    }
+
+    private void detachAllCapturePlayers() {
+        var carriers = List.copyOf(capturePlayerStacks.keySet());
+        var prisoners = List.copyOf(capturePlayerCarrierByPrisoner.keySet());
+        capturePlayerStacks.clear();
+        capturePlayerCarrierByPrisoner.clear(); // Clear ownership before emitting dismount events.
+        for (UUID id : carriers) {
+            Player carrier = Bukkit.getPlayer(id);
+            if (carrier != null) carrier.eject();
+        }
+        for (UUID id : prisoners) {
+            Player prisoner = Bukkit.getPlayer(id);
             if (prisoner != null) {
                 prisoner.leaveVehicle();
                 restoreCapturePlayerState(prisoner);
             }
         }
+    }
+
+    private void clearCapturePlayersState() {
+        detachAllCapturePlayers();
         capturePlayerJails.clear();
         capturePlayerStacks.clear();
         capturePlayerCarrierByPrisoner.clear();
@@ -2402,12 +2432,18 @@ public final class EventGameplayListener implements Listener {
         }
         restoreCapturePlayerState(player);
         applyCapturePlayersLoadout(player, team);
+        player.updateInventory();
         player.setHealth(player.getMaxHealth());
         player.setFoodLevel(20);
         player.setSaturation(10.0F);
         player.setGameMode(GameMode.SURVIVAL);
         if (spawn != null) {
-            TeleportService.teleport(plugin, player, spawn, "capture players respawn");
+            TeleportService.teleport(plugin, player, spawn, "capture players respawn").thenAccept(success -> {
+                if (success) Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (eventManager.session() == session && session.phase() == EventPhase.ACTIVE
+                            && session.participants().contains(player.getUniqueId()) && player.isOnline()) player.updateInventory();
+                });
+            });
         }
         player.sendMessage(ChatColor.GOLD + "[Events] " + ChatColor.GRAY + message);
     }
@@ -2548,27 +2584,42 @@ public final class EventGameplayListener implements Listener {
         if (stack == null || stack.isEmpty()) {
             return;
         }
-        carrier.eject();
-        Entity mount = carrier;
-        for (CapturePlayersCarryEntry entry : stack) {
-            Player prisoner = Bukkit.getPlayer(entry.prisonerId());
-            if (prisoner == null) {
-                continue;
+        stack.forEach(entry -> capturePlayerCarrierByPrisoner.remove(entry.prisonerId()));
+        Set<UUID> mounted = new HashSet<>();
+        try {
+            carrier.eject();
+            Entity mount = carrier;
+            for (CapturePlayersCarryEntry entry : stack) {
+                Player prisoner = Bukkit.getPlayer(entry.prisonerId());
+                if (prisoner == null) continue;
+                prisoner.leaveVehicle();
+                if (!mount.addPassenger(prisoner)) {
+                    restoreCapturePlayerState(prisoner);
+                    plugin.recordSessionEvidence(eventManager.session(), "capture-mount-rejected", entry.prisonerId());
+                    continue;
+                }
+                mounted.add(entry.prisonerId());
+                mount = prisoner;
             }
-            prisoner.leaveVehicle();
-            mount.addPassenger(prisoner);
-            mount = prisoner;
+        } finally {
+            for (CapturePlayersCarryEntry entry : stack) {
+                if (mounted.contains(entry.prisonerId())) capturePlayerCarrierByPrisoner.put(entry.prisonerId(), carrierId);
+                else {
+                    Player prisoner = Bukkit.getPlayer(entry.prisonerId());
+                    if (prisoner != null) restoreCapturePlayerState(prisoner);
+                }
+            }
+            stack.removeIf(entry -> !mounted.contains(entry.prisonerId()));
+            if (stack.isEmpty()) capturePlayerStacks.remove(carrierId);
         }
     }
 
     private void releaseCapturePlayersStack(EventSession session, EventMap map, Player carrier, boolean respawnCapturedPlayers) {
         List<CapturePlayersCarryEntry> stack = capturePlayerStacks.remove(carrier.getUniqueId());
+        if (stack == null || stack.isEmpty()) return;
+        stack.forEach(entry -> capturePlayerCarrierByPrisoner.remove(entry.prisonerId()));
         carrier.eject();
-        if (stack == null || stack.isEmpty()) {
-            return;
-        }
         for (CapturePlayersCarryEntry entry : stack) {
-            capturePlayerCarrierByPrisoner.remove(entry.prisonerId());
             Player prisoner = Bukkit.getPlayer(entry.prisonerId());
             if (prisoner == null) {
                 continue;
@@ -2591,8 +2642,8 @@ public final class EventGameplayListener implements Listener {
         if (stack == null) {
             return;
         }
+        stack.forEach(entry -> capturePlayerCarrierByPrisoner.remove(entry.prisonerId()));
         for (CapturePlayersCarryEntry entry : stack) {
-            capturePlayerCarrierByPrisoner.remove(entry.prisonerId());
             Player prisoner = Bukkit.getPlayer(entry.prisonerId());
             if (prisoner != null) {
                 prisoner.leaveVehicle();
@@ -2661,14 +2712,7 @@ public final class EventGameplayListener implements Listener {
 
     private void resetCapturePlayersRound(EventSession session, EventMap map) {
         clearCapturePlayersProgress(null);
-        for (UUID carrierId : List.copyOf(capturePlayerStacks.keySet())) {
-            Player carrier = Bukkit.getPlayer(carrierId);
-            if (carrier != null) {
-                releaseCapturePlayersStack(session, map, carrier, true);
-            } else {
-                capturePlayerStacks.remove(carrierId);
-            }
-        }
+        detachAllCapturePlayers();
         capturePlayerJails.clear();
         for (UUID uuid : session.participants()) {
             Player player = Bukkit.getPlayer(uuid);
@@ -3373,7 +3417,8 @@ public final class EventGameplayListener implements Listener {
     }
 
     private boolean isHungerLockedEvent(EventType type) {
-        return type == EventType.KNOCKBACK_FFA
+        return type == EventType.RUNNER
+                || type == EventType.KNOCKBACK_FFA
                 || type == EventType.PARKOUR
                 || type == EventType.ELYTRA_RACE
                 || type == EventType.BLOCK_PARTY
@@ -3389,7 +3434,8 @@ public final class EventGameplayListener implements Listener {
     }
 
     private boolean usesFallElimination(EventType type) {
-        return type == EventType.SPLEEF
+        return type == EventType.RUNNER
+                || type == EventType.SPLEEF
                 || type == EventType.SPLEGG
                 || type == EventType.SUMO_1V1
                 || type == EventType.SUMO_2V2

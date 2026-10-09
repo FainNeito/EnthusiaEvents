@@ -74,6 +74,7 @@ public final class EventSpecAuditRegistry {
         put(EventType.BLOCK_PARTY, "spawns, spectator, region, color floor", false, false, "last player standing", "tracked floor");
         put(EventType.HOT_POTATO, "spawns, spectator, region", false, false, "last player standing", "restore players");
         put(EventType.SPLEEF, "spawns, spectator, region, breakable area", false, false, "last player standing", "tracked blocks");
+        put(EventType.RUNNER, "spawns, spectator, region, breakable area", false, false, "last player standing", "tracked blocks");
         put(EventType.SPLEGG, "spawns, spectator, region, breakable area", false, false, "last player standing", "tracked blocks");
         put(EventType.RED_LIGHT_GREEN_LIGHT, "spawns, finish, spectator, region, light display", false, false, "survive to finish", "restore displays");
         put(EventType.BOAT_RACE, "spawns, finish, spectator, region", false, false, "finish order", "restore players");

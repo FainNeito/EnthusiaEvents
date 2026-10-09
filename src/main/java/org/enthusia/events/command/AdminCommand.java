@@ -44,6 +44,7 @@ public final class AdminCommand implements CommandExecutor, TabCompleter {
         if (args.length == 0) {
             return false;
         }
+        if (plugin.toolsCommands().handle(sender, args)) return true;
         return switch (args[0].toLowerCase(Locale.ROOT)) {
             case "map" -> mapHandler.handle(sender, args);
             case "setup" -> setupHandler.handle(sender, args);
