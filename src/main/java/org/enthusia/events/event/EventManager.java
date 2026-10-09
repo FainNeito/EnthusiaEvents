@@ -489,11 +489,12 @@ public final class EventManager {
         boolean wasParticipant = session.participants().remove(player.getUniqueId());
         gameplayPlayerLeave.accept(player);
         if (wasParticipant) {
+            plugin.recordSessionEvidence(session, "departure", player.getUniqueId());
             cleanupBoatRacePlayer(player.getUniqueId());
             kitService.clearSelection(player.getUniqueId());
             spawnLocked.remove(player.getUniqueId());
         }
-        if (wasParticipant && session.phase() == EventPhase.ACTIVE) handleBracketQuit(player.getUniqueId());
+        if (wasParticipant) finishActiveWithdrawal(player.getUniqueId());
         session.spectators().add(player.getUniqueId());
         markEventPlayer(player);
         player.setGameMode(GameMode.SPECTATOR);
@@ -523,14 +524,15 @@ public final class EventManager {
             }
         }));
         notifySessionPlayers("event-player-left", player.getName(), player.getUniqueId());
-        if (wasParticipant && session != null && session.phase() == EventPhase.ACTIVE
-                && handleBracketQuit(player.getUniqueId())) return true;
-        if (wasParticipant && session != null && session.phase() == EventPhase.ACTIVE) {
-            if (session.participants().isEmpty()) scheduleEndActiveEvent(List.copyOf(session.finalRankings()), 0L);
-            else if (isLastPlayerStandingEvent(session.definition().type()) && session.participants().size() <= 1)
-                scheduleEndActiveEvent(List.copyOf(session.participants()), 60L);
-        }
+        if (wasParticipant) finishActiveWithdrawal(player.getUniqueId());
         return true;
+    }
+
+    private void finishActiveWithdrawal(UUID playerId) {
+        if (session == null || session.phase() != EventPhase.ACTIVE || handleBracketQuit(playerId)) return;
+        if (session.participants().isEmpty()) scheduleEndActiveEvent(List.copyOf(session.finalRankings()), 0L);
+        else if (isLastPlayerStandingEvent(session.definition().type()) && session.participants().size() <= 1)
+            scheduleEndActiveEvent(List.copyOf(session.participants()), 60L);
     }
 
     public void finishParticipant(Player player) {

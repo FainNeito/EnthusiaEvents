@@ -52,22 +52,32 @@ public final class SessionTraceWriter implements AutoCloseable {
         return value.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').substring(0, Math.min(160, value.length()));
     }
     private void writeLoop() {
+        boolean warned = false;
         try {
-            Files.createDirectories(path.getParent());
             while (running || !queue.isEmpty()) {
                 String line = queue.poll(100, TimeUnit.MILLISECONDS);
                 if (line == null) continue;
-                // A bounded current log plus one rotated file. Existing files are never exposed by commands.
-                if (Files.exists(path) && Files.size(path) > 2_000_000)
-                    Files.move(path, path.resolveSibling("sessions.previous.log"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                Files.writeString(path, line + "\n", StandardCharsets.UTF_8,
-                        StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+                try {
+                    append(line);
+                } catch (IOException exception) {
+                    droppedRecords.incrementAndGet();
+                    if (!warned) {
+                        warned = true;
+                        warning.accept("Session trace file failed: " + exception.getClass().getSimpleName() + "; recent in-memory trace remains available");
+                    }
+                }
             }
-        } catch (IOException exception) {
-            warning.accept("Session trace file failed: " + exception.getClass().getSimpleName() + "; recent in-memory trace remains available");
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
         }
+    }
+    private void append(String line) throws IOException {
+        Files.createDirectories(path.getParent());
+        // A bounded current log plus one rotated file. Existing files are never exposed by commands.
+        if (Files.exists(path) && Files.size(path) > 2_000_000)
+            Files.move(path, path.resolveSibling("sessions.previous.log"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Files.writeString(path, line + "\n", StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
     @Override public void close() {
         running = false;

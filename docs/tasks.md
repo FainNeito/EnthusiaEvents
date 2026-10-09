@@ -17,7 +17,11 @@ Runtime acceptance: carrier targeting/armor rendering on Java and Bedrock, full 
 
 ## Follow-up 2026-10-09
 
-- [ ] Review all 39 Codacy findings and correct applicable maintainability issues; document narrowly scoped false-positive/test-fixture exceptions.
-- [ ] Enable ready-for-review status and inspect the resulting CodeRabbit review.
-- [ ] Re-run canonical verification after refinement and inspect exact-head checks.
-- [ ] Prepare an isolated TEST playtest plan with rollback, fixture setup and explicit client acceptance evidence.
+- [x] Review all 39 Codacy findings and correct applicable maintainability issues; document narrowly scoped false-positive/test-fixture exceptions.
+- [x] Enable ready-for-review status and inspect the resulting CodeRabbit review.
+- [x] Re-run canonical verification after refinement and inspect hosted checks for the refined head.
+- [x] Prepare an isolated TEST playtest plan with rollback, fixture setup and explicit client acceptance evidence.
+
+CodeRabbit's first completed review identified three applicable findings: spectate withdrawal misses evidence/last-survivor completion; reset status should say `none`; the trace writer should recover after transient file errors. Establish focused withdrawal/file-recovery regressions before correcting those paths. TEST stays stopped until its staged candidate includes these fixes.
+
+All three findings are corrected; three focused assertions fail on the reviewed implementation and pass here. Canonical and TEST-runtime API clean verification each pass 31 tests. Inspect new-head hosted checks after pushing; upstream workflow approval remains unavailable to this account. Java/Bedrock acceptance remains pending.

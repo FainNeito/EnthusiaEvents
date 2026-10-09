@@ -43,7 +43,9 @@ public final class EventToolsCommands {
                 case "resetarena" -> {
                     if (manager.hasSession()) throw new IllegalArgumentException("Stop the event before retrying arena reset.");
                     reset.reset();
-                    sender.sendMessage("Arena reset pending blocks: " + reset.pendingBlocks() + "; failure: " + reset.failure());
+                    String failure = reset.failure();
+                    sender.sendMessage("Arena reset pending blocks: " + reset.pendingBlocks() + "; failure: "
+                            + (failure == null ? "none" : failure));
                 }
                 case "readiness" -> {
                     if (args.length < EVENT_ARGUMENT_COUNT) throw new IllegalArgumentException("/ee readiness <EVENT>");

@@ -7,6 +7,21 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static org.junit.jupiter.api.Assertions.*;
 class SessionTraceWriterTest {
     @TempDir Path directory;
+    @Test void transientFileErrorDoesNotPreventLaterWrites() throws Exception {
+        Path obstruction = directory.resolve("blocked"); Files.writeString(obstruction, "existing");
+        var failed = new java.util.concurrent.CountDownLatch(1);
+        var warnings = new CopyOnWriteArrayList<String>();
+        try (var trace = new SessionTraceWriter(obstruction, message -> { warnings.add(message); failed.countDown(); })) {
+            trace.record(UUID.randomUUID(), "RUNNER", "map", "ACTIVE", "before-recovery", null);
+            assertTrue(failed.await(2, java.util.concurrent.TimeUnit.SECONDS), "file error must be observed");
+            Files.delete(obstruction); Files.createDirectory(obstruction);
+            trace.record(UUID.randomUUID(), "RUNNER", "map", "ACTIVE", "after-recovery", null);
+        }
+        Path log = obstruction.resolve("sessions.log");
+        assertTrue(Files.exists(log), "writer must resume after the destination recovers");
+        assertTrue(Files.readString(log).contains("after-recovery"));
+        assertEquals(1, warnings.stream().filter(message -> message.contains("file failed")).count());
+    }
     @Test void flushesSanitizedRecordsAndBoundsRecentHistory() throws Exception {
         UUID id = UUID.randomUUID(); var warnings = new CopyOnWriteArrayList<String>();
         try (var trace = new SessionTraceWriter(directory, warnings::add)) {
