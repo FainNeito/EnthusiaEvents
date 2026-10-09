@@ -59,7 +59,8 @@ This follow-up changes documentation and command help only. Spec/source inspecti
 - [x] Historical preview/confirm, undo and durable uncertainty reconciliation; resolved-only retention.
 - [x] Seasonal participation/grace, personal bests, owned cosmetic selection.
 - [x] Regression proof and canonical/API matrix: 56 tests and PMD on each profile.
-- [ ] Exact-head hosted review/CI and merge authorized source; upstream account is read-only.
+- [x] Inspect exact-head static analysis and fork hosted CI; engine fe00627 passes with zero new issues.
+- [ ] Obtain maintainer review/upstream workflow approval and merge authorized source; account is read-only.
 - [x] Refresh interactive preview and confirm saved Page readback.
 
 Local testing hold lifted by renewed request; no production action authorized.
