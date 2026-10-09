@@ -110,6 +110,9 @@ public final class EventManager {
     };
     private Consumer<EventSession> gameplayPreStart = ignored -> {
     };
+    private Consumer<Player> gameplayPlayerLeave = ignored -> {};
+    public void gameplayPlayerLeave(Consumer<Player> callback) { gameplayPlayerLeave = callback; }
+    public boolean isArenaResetting() { return arenaResetService != null && arenaResetService.isResetting(); }
     private EventScoreboardService scoreboardService;
     private ArenaResetService arenaResetService;
     private PodiumService podiumService;
@@ -130,6 +133,7 @@ public final class EventManager {
     }
 
     public List<EventDefinition> availableStartChoices() {
+        if (isArenaResetting()) return List.of();
         return registry.all().stream()
                 .filter(definition -> !isEventDisabled(definition.type()))
                 .filter(definition -> !mapSetupService.usableMapsFor(definition.type()).isEmpty())
@@ -141,6 +145,7 @@ public final class EventManager {
     }
 
     public boolean startScheduledVote() {
+        if (isArenaResetting()) return false;
         if (session != null) {
             if (session.privateSession()) {
                 return false;
@@ -163,6 +168,8 @@ public final class EventManager {
     }
 
     public boolean startManualVote(CommandSender initiator, EventDefinition forced, boolean discountedRandom) {
+        if (forced != null && forced.type() == EventType.SPEEDBUILDERS) return false;
+        if (isArenaResetting()) return false;
         if (session != null) {
             return false;
         }
@@ -184,7 +191,7 @@ public final class EventManager {
         if (initiator instanceof Player player) {
             resetRuntimeServices();
             runtimeScoreboardValues.clear();
-            session = new EventSession(definition, EventPhase.JOIN);
+            session = newSession(definition, EventPhase.JOIN);
             session.startedBy(player.getName());
             session.waitingHub(configuredLocation("locations.waiting-hub"));
             session.trophyRoom(configuredLocation("locations.trophy-room"));
@@ -204,6 +211,9 @@ public final class EventManager {
     }
 
     public boolean startPrivateEvent(CommandSender initiator, EventType type, List<Player> invitedPlayers) {
+        if (type == EventType.SPEEDBUILDERS && (!plugin.getConfig().getBoolean("speedbuilders.enabled", false)
+                || plugin.arenaRecovery() == null || !plugin.arenaRecovery().enabled(type))) return false;
+        if (isArenaResetting()) return false;
         if (session != null) {
             return false;
         }
@@ -213,7 +223,7 @@ public final class EventManager {
         }
         resetRuntimeServices();
         runtimeScoreboardValues.clear();
-        session = new EventSession(definition, EventPhase.JOIN);
+        session = newSession(definition, EventPhase.JOIN);
         session.adminStarted(true);
         session.privateSession(true);
         session.startedBy(initiator.getName());
@@ -245,6 +255,7 @@ public final class EventManager {
     }
 
     public String manualStartFailureReason(Player player, EventDefinition forced, boolean discountedRandom) {
+        if (isArenaResetting()) return "the previous arena reset is pending; staff can retry it with /ee resetarena";
         if (session != null) {
             return "a " + session.definition().displayName() + " event is already running";
         }
@@ -303,6 +314,8 @@ public final class EventManager {
     }
 
     public boolean startForcedEvent(EventType type) {
+        if (type == EventType.SPEEDBUILDERS) return false;
+        if (isArenaResetting()) return false;
         if (session != null) {
             return false;
         }
@@ -311,7 +324,7 @@ public final class EventManager {
             return false;
         }
         resetRuntimeServices();
-        session = new EventSession(definition, EventPhase.JOIN);
+        session = newSession(definition, EventPhase.JOIN);
         runtimeScoreboardValues.clear();
         session.adminStarted(true);
         session.waitingHub(configuredLocation("locations.waiting-hub"));
@@ -324,6 +337,7 @@ public final class EventManager {
     }
 
     public String forcedStartFailureReason(EventType type) {
+        if (isArenaResetting()) return "the previous arena reset is pending; staff can retry it with /ee resetarena";
         if (session != null) {
             return "a " + session.definition().displayName() + " event is already running";
         }
@@ -340,6 +354,7 @@ public final class EventManager {
     }
 
     public String privateStartFailureReason(EventType type) {
+        if (isArenaResetting()) return "the previous arena reset is pending; staff can retry it with /ee resetarena";
         if (session != null) {
             return "a " + session.definition().displayName() + " event is already running";
         }
@@ -424,7 +439,7 @@ public final class EventManager {
             return true;
         }
         if (!snapshotService.capture(player)) {
-            plugin.messages().send(player, "event-join-blocked-unrestored");
+            plugin.messages().send(player, "event-snapshot-capture-failed");
             return true;
         }
         healForEvent(player);
@@ -471,11 +486,19 @@ public final class EventManager {
                 return true;
             }
             if (!snapshotService.capture(player)) {
-                plugin.messages().send(player, "event-join-blocked-unrestored");
+                plugin.messages().send(player, "event-snapshot-capture-failed");
                 return true;
             }
         }
-        session.participants().remove(player.getUniqueId());
+        boolean wasParticipant = session.participants().remove(player.getUniqueId());
+        gameplayPlayerLeave.accept(player);
+        if (wasParticipant) {
+            plugin.recordSessionEvidence(session, "departure", player.getUniqueId());
+            cleanupBoatRacePlayer(player.getUniqueId());
+            kitService.clearSelection(player.getUniqueId());
+            spawnLocked.remove(player.getUniqueId());
+        }
+        if (wasParticipant) finishActiveWithdrawal(player.getUniqueId());
         session.spectators().add(player.getUniqueId());
         markEventPlayer(player);
         player.setGameMode(GameMode.SPECTATOR);
@@ -490,7 +513,9 @@ public final class EventManager {
         if (session == null) {
             return false;
         }
-        session.participants().remove(player.getUniqueId());
+        boolean wasParticipant = session.participants().remove(player.getUniqueId());
+        plugin.recordSessionEvidence(session, "departure", player.getUniqueId());
+        gameplayPlayerLeave.accept(player);
         session.spectators().remove(player.getUniqueId());
         playerVotes.remove(player.getUniqueId());
         kitService.clearSelection(player.getUniqueId());
@@ -503,16 +528,22 @@ public final class EventManager {
             }
         }));
         notifySessionPlayers("event-player-left", player.getName(), player.getUniqueId());
-        if (session != null && session.phase() == EventPhase.ACTIVE && session.participants().isEmpty()) {
-            scheduleEndActiveEvent(List.copyOf(session.finalRankings()), 0L);
-        }
+        if (wasParticipant) finishActiveWithdrawal(player.getUniqueId());
         return true;
+    }
+
+    private void finishActiveWithdrawal(UUID playerId) {
+        if (session == null || session.phase() != EventPhase.ACTIVE || handleBracketQuit(playerId)) return;
+        if (session.participants().isEmpty()) scheduleEndActiveEvent(List.copyOf(session.finalRankings()), 0L);
+        else if (isLastPlayerStandingEvent(session.definition().type()) && session.participants().size() <= 1)
+            scheduleEndActiveEvent(List.copyOf(session.participants()), 60L);
     }
 
     public void finishParticipant(Player player) {
         if (session == null || session.phase() != EventPhase.ACTIVE || !session.participants().remove(player.getUniqueId())) {
             return;
         }
+        if (plugin.seasonProgress() != null) plugin.seasonProgress().finished(session, player.getUniqueId());
         cleanupBoatRacePlayer(player.getUniqueId());
         if (!session.finalRankings().contains(player.getUniqueId())) {
             session.finalRankings().add(player.getUniqueId());
@@ -679,6 +710,8 @@ public final class EventManager {
             return;
         }
         boolean wasParticipant = session.participants().remove(player.getUniqueId());
+        plugin.recordSessionEvidence(session, "departure", player.getUniqueId());
+        gameplayPlayerLeave.accept(player);
         session.spectators().remove(player.getUniqueId());
         playerVotes.remove(player.getUniqueId());
         cleanupBoatRacePlayer(player.getUniqueId());
@@ -799,6 +832,13 @@ public final class EventManager {
         playConfiguredSound(player, "sounds.vote-cast");
     }
 
+    private EventSession newSession(EventDefinition definition, EventPhase phase) {
+        EventSession created = new EventSession(definition, phase);
+        created.phaseObserver(next -> plugin.recordSessionEvidence(created, "phase", null));
+        plugin.recordSessionEvidence(created, "created", null);
+        return created;
+    }
+
     public EventSession session() {
         return session;
     }
@@ -835,12 +875,13 @@ public final class EventManager {
         }
         if (arenaResetService != null) {
             arenaResetService.reset();
+            plugin.recordSessionEvidence(session, "arena-reset pending=" + arenaResetService.pendingBlocks(), null);
         }
         if (podiumService != null) {
             podiumService.show(rankedPlayers);
         }
         if (!rankedPlayers.isEmpty()) {
-            Set<UUID> winners = session.definition().type() == EventType.CAPTURE_PLAYERS
+            Set<UUID> winners = session.definition().type() == EventType.CAPTURE_PLAYERS || session.definition().type() == EventType.SPEEDBUILDERS
                     ? Set.copyOf(rankedPlayers)
                     : Set.of(rankedPlayers.getFirst());
             for (UUID winner : winners) {
@@ -882,6 +923,8 @@ public final class EventManager {
     }
 
     public void stop(String reason) {
+        if (plugin.speedbuilders() != null) plugin.speedbuilders().stop();
+        if (session != null && plugin.seasonProgress() != null) plugin.seasonProgress().cancel(session.id());
         cancelTask();
         cancelActiveTask();
         cancelPreStartTask();
@@ -1045,7 +1088,7 @@ public final class EventManager {
     private void createVoteSession(List<EventDefinition> choices, String startedBy, boolean adminStarted) {
         resetRuntimeServices();
         runtimeScoreboardValues.clear();
-        session = new EventSession(choices.getFirst(), EventPhase.VOTE);
+        session = newSession(choices.getFirst(), EventPhase.VOTE);
         session.startedBy(startedBy);
         session.adminStarted(adminStarted);
         session.waitingHub(configuredLocation("locations.waiting-hub"));
@@ -1180,6 +1223,33 @@ public final class EventManager {
             cancelForNotEnoughPlayers();
             return false;
         }
+        if (plugin.arenaPreflight() != null && (plugin.getConfig().getBoolean("preflight.enforce-start", false)
+                || session.definition().type() == EventType.SPEEDBUILDERS
+                || plugin.arenaRecovery().enabled(session.definition().type()))) {
+            var findings = session.selectedMap() == null ? List.<org.enthusia.events.domain.PreflightFinding>of()
+                    : plugin.arenaPreflight().inspect(session.selectedMap());
+            if (session.selectedMap() == null || !org.enthusia.events.infrastructure.ArenaPreflight.ready(findings)) {
+                messageEventPlayers("Arena preflight blocked activation. Staff: /ee preflight " + session.definition().type() + " <map>");
+                stop("Arena preflight failed"); return false;
+            }
+        }
+        if (session.definition().type() == EventType.SPEEDBUILDERS && plugin.speedbuilders() != null) {
+            var errors = plugin.speedbuilders().validate(session);
+            if (!errors.isEmpty()) { messageEventPlayers(String.join("; ", errors)); stop("Speedbuilders setup incomplete"); return false; }
+        }
+        if (plugin.arenaRecovery() != null && plugin.arenaRecovery().enabled(session.definition().type()) && !plugin.arenaRecovery().prepared(session)) {
+            if (plugin.arenaRecovery().blocked()) return false;
+            cancelTask(); cancelPreStartTask();
+            session.phase(EventPhase.PRESTART);
+            EventSession preparing = session;
+            plugin.arenaRecovery().prepare(preparing, () -> {
+                if (session == preparing && preparing.phase() == EventPhase.PRESTART) beginActivePhase();
+                else plugin.arenaRecovery().reset();
+            }, failure -> {
+                if (session == preparing) { messageEventPlayers(failure); stop("Arena baseline not committed"); }
+            });
+            return true;
+        }
         cancelTask();
         cancelPreStartTask();
         resetBracketState();
@@ -1293,6 +1363,15 @@ public final class EventManager {
         if (session == null) {
             return;
         }
+        boolean enforce = plugin.getConfig().getBoolean("preflight.enforce-start", false) || session.definition().type() == EventType.SPEEDBUILDERS
+                || (plugin.arenaRecovery() != null && plugin.arenaRecovery().enabled(session.definition().type()));
+        if (enforce && (session.selectedMap() == null || !org.enthusia.events.infrastructure.ArenaPreflight.ready(plugin.arenaPreflight().inspect(session.selectedMap())))) {
+            messageEventPlayers("Arena changed or checks became unavailable during preparation; activation cancelled.");
+            stop("Final arena preflight failed"); return;
+        }
+        if (plugin.arenaRecovery() != null && plugin.arenaRecovery().enabled(session.definition().type()) && !plugin.arenaRecovery().prepared(session)) {
+            stop("Durable arena lease unavailable"); return;
+        }
         cancelPreStartTask();
         Set<UUID> lockedPlayers = Set.copyOf(spawnLocked);
         spawnLocked.clear();
@@ -1304,6 +1383,7 @@ public final class EventManager {
             }
         }
         session.phase(EventPhase.ACTIVE);
+        if (plugin.seasonProgress() != null) plugin.seasonProgress().pin(session, session.participants());
         clearCountdownExperience();
         playGoSound();
         playGlobalEventStartSound();
@@ -1317,6 +1397,9 @@ public final class EventManager {
             statsService.recordParticipation(uuid, session.definition().type());
         }
         messageEventPlayers(plugin.messages().format("event-active-started", Map.of("event", session.definition().displayName())));
+        if (session.definition().type() == EventType.SPEEDBUILDERS && plugin.speedbuilders() != null) {
+            plugin.speedbuilders().start(session); return;
+        }
         scheduleActiveTimer(session.definition().type());
     }
 
@@ -1546,6 +1629,7 @@ public final class EventManager {
             return;
         }
         EventSession finished = session;
+        plugin.recordSessionEvidence(finished, "finished participants=" + finished.participants().size(), null);
         if (!finished.finalRankings().isEmpty()) {
             payWinner(finished);
         }
@@ -1568,6 +1652,10 @@ public final class EventManager {
     }
 
     private void startQueuedEvent(EventDefinition definition) {
+        if (isArenaResetting()) {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> startQueuedEvent(definition), 100L);
+            return;
+        }
         if (session != null) {
             queue.add(definition);
             return;
@@ -1577,7 +1665,7 @@ public final class EventManager {
         }
         resetRuntimeServices();
         runtimeScoreboardValues.clear();
-        session = new EventSession(definition, EventPhase.JOIN);
+        session = newSession(definition, EventPhase.JOIN);
         session.startedBy("Queue");
         session.waitingHub(configuredLocation("locations.waiting-hub"));
         session.trophyRoom(configuredLocation("locations.trophy-room"));
@@ -1623,7 +1711,9 @@ public final class EventManager {
             allowedTeleports.remove(uuid);
             return CompletableFuture.completedFuture(false);
         }
+        EventSession restoringSession = session;
         return snapshotService.restore(player, consumeSnapshot).thenApply(restored -> {
+            plugin.recordSessionEvidence(restoringSession, restored ? "restore-success" : "restore-failed", uuid);
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (restored) {
                     restoreScoreboard(player);
@@ -1708,6 +1798,7 @@ public final class EventManager {
     }
 
     private void payWinner(EventSession finished) {
+        if (finished.definition().type() == EventType.SPEEDBUILDERS) return;
         if (finished.finalRankings().isEmpty() || economy == null) {
             return;
         }
@@ -1912,6 +2003,19 @@ public final class EventManager {
             return;
         }
         Bukkit.broadcast(message);
+    }
+
+    public boolean teleportGameParticipant(Player player, Location destination) {
+        if (player == null || destination == null || session == null || session.phase() != EventPhase.ACTIVE
+                || !session.participants().contains(player.getUniqueId())) return false;
+        if (!gameDestinationAllowed(destination)) return false;
+        allowTeleport(player.getUniqueId());
+        return player.teleport(destination);
+    }
+
+    private boolean gameDestinationAllowed(Location destination) {
+        EventMap map = session.selectedMap();
+        return map != null && map.region() != null && map.region().contains(destination);
     }
 
     private void allowTeleport(UUID uuid) {
@@ -2292,6 +2396,7 @@ public final class EventManager {
                 player.getAttribute(org.bukkit.attribute.Attribute.MAX_HEALTH).setBaseValue(2.0D);
                 player.setHealth(2.0D);
             }
+            case RUNNER -> player.setGameMode(GameMode.ADVENTURE);
             case SPLEEF -> {
                 player.setGameMode(GameMode.SURVIVAL);
                 player.getInventory().addItem(namedItem(Material.DIAMOND_SHOVEL, "Spleef Shovel"));
@@ -2558,9 +2663,11 @@ public final class EventManager {
     }
 
     private void resetRuntimeServices() {
+        if (plugin.speedbuilders() != null) plugin.speedbuilders().stop();
         gameplayRuntimeReset.run();
         if (arenaResetService != null) {
             arenaResetService.reset();
+            plugin.recordSessionEvidence(session, "arena-reset pending=" + arenaResetService.pendingBlocks(), null);
         }
         if (session != null && session.definition().type() == EventType.BLOCK_PARTY) {
             prepareBlockPartyFloor(session.selectedMap());
@@ -2587,7 +2694,8 @@ public final class EventManager {
                 || type == EventType.BLOCK_PARTY
                 || type == EventType.HOT_POTATO
                 || type == EventType.SPLEEF
-                || type == EventType.SPLEGG;
+                || type == EventType.SPLEGG
+                || type == EventType.RUNNER;
     }
 
     private boolean canMoveDuringPreStart(EventType type) {
@@ -2600,7 +2708,8 @@ public final class EventManager {
                 || type == EventType.ONE_IN_THE_CHAMBER
                 || type == EventType.BLOCK_PARTY
                 || type == EventType.SPLEEF
-                || type == EventType.SPLEGG;
+                || type == EventType.SPLEGG
+                || type == EventType.RUNNER;
     }
 
     private void cleanupBoatRacePlayer(UUID uuid) {

@@ -116,6 +116,7 @@ public final class EventConfigService {
 
     private EventSettings defaults(EventType type) {
         return switch (type) {
+            case SPEEDBUILDERS -> new EventSettings(Material.BRICKS, "Memorize and rebuild a template in your private plot. Equal scores share the result.", 2, 2, 0.0D, 1200L);
             case SKYWARS -> new EventSettings(Material.FEATHER, "Loot island chests, bridge carefully, and be the last player alive.", 2, 2, 100.0D, 600L);
             case BEDWARS -> new EventSettings(Material.RED_BED, "Solo BedWars. Protect your bed, use island generators, and eliminate every other player.", 2, 2, 100.0D, 1200L);
             case FIGHT_1V1 -> new EventSettings(Material.IRON_SWORD, "A straight kit fight. Last player standing wins.", 2, 2, 100.0D, 300L);
@@ -131,6 +132,7 @@ public final class EventConfigService {
             case CAPTURE_PLAYERS -> new EventSettings(Material.IRON_CHAIN, "Capture enemy players, defend your jail, and free your teammates.", 2, 4, 100.0D, 600L);
             case BLOCK_PARTY -> new EventSettings(Material.NOTE_BLOCK, "Stand on the called color before the timer locks each round.", 2, 4, 100.0D, 420L);
             case HOT_POTATO -> new EventSettings(Material.BAKED_POTATO, "Pass the hot potato before it explodes. Last player safe wins.", 2, 4, 100.0D, 420L);
+            case RUNNER -> new EventSettings(Material.TNT, "Keep running as the floor disappears. Last player standing wins.", 2, 4, 100.0D, 420L);
             case SPLEEF -> new EventSettings(Material.DIAMOND_SHOVEL, "Break the floor under other players and be the last one standing.", 2, 4, 100.0D, 420L);
             case SPLEGG -> new EventSettings(Material.SNOWBALL, "Use snowballs and shovels to break blocks and drop opponents.", 2, 4, 100.0D, 420L);
             case RED_LIGHT_GREEN_LIGHT -> new EventSettings(Material.REDSTONE_TORCH, "Move on green, freeze on red, and survive until the end.", 2, 4, 100.0D, 300L);

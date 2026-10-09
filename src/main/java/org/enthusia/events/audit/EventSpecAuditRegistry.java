@@ -58,6 +58,7 @@ public final class EventSpecAuditRegistry {
     }
 
     private void registerDefaults() {
+        put(EventType.SPEEDBUILDERS, "private opt-in, plot-<id> areas/spawns, build-template area, durable ordinary-block recovery", false, false, "highest build score; tied winners", "durable baseline");
         put(EventType.SKYWARS, "spawn, spectator, region, tiered chests", true, true, "last player standing", "tracked blocks");
         put(EventType.BEDWARS, "team spawns, spectator, region, beds, shops, generators", true, true, "last team alive", "tracked blocks");
         put(EventType.FIGHT_1V1, "spawns, spectator, region", true, false, "last player standing", "restore players");
@@ -74,6 +75,7 @@ public final class EventSpecAuditRegistry {
         put(EventType.BLOCK_PARTY, "spawns, spectator, region, color floor", false, false, "last player standing", "tracked floor");
         put(EventType.HOT_POTATO, "spawns, spectator, region", false, false, "last player standing", "restore players");
         put(EventType.SPLEEF, "spawns, spectator, region, breakable area", false, false, "last player standing", "tracked blocks");
+        put(EventType.RUNNER, "spawns, spectator, region, breakable area", false, false, "last player standing", "tracked blocks");
         put(EventType.SPLEGG, "spawns, spectator, region, breakable area", false, false, "last player standing", "tracked blocks");
         put(EventType.RED_LIGHT_GREEN_LIGHT, "spawns, finish, spectator, region, light display", false, false, "survive to finish", "restore displays");
         put(EventType.BOAT_RACE, "spawns, finish, spectator, region", false, false, "finish order", "restore players");

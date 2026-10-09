@@ -272,6 +272,7 @@ public final class EventRestrictionsListener implements Listener {
     }
 
     private boolean shouldBlockMapEdit(Player player, Location location) {
+        if (plugin.arenaRecovery() != null && plugin.arenaRecovery().quarantine() && mapSetupService.isInsideAnyConfiguredRegion(location)) return true;
         EventSession session = eventManager.session();
         if (session != null && eventManager.isEventPlayer(player.getUniqueId()) && session.phase() != EventPhase.ACTIVE) {
             return true;
@@ -285,7 +286,8 @@ public final class EventRestrictionsListener implements Listener {
             return type != EventType.SKYWARS
                     && type != EventType.BEDWARS
                     && type != EventType.SPLEEF
-                    && type != EventType.SPLEGG;
+                    && type != EventType.SPLEGG
+                    && type != EventType.SPEEDBUILDERS;
         }
         CuboidRegion hubRegion = eventManager.waitingHubRegion();
         if (hubRegion != null && hubRegion.contains(location)) {

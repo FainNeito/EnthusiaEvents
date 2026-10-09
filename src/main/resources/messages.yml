@@ -1,6 +1,7 @@
 prefix: "&8[&6Events&8]&r "
 event-joined: "{prefix}&aYou're in. &7Wait in the hub until the event starts."
 event-already-joined: "{prefix}&cYou're already queued for this event."
+event-snapshot-capture-failed: "{prefix}&cYour event snapshot could not be saved. Entry was cancelled and your inventory was not changed. Contact staff."
 event-join-blocked-unrestored: "{prefix}&cYou have an unrestored event snapshot. Ask staff to run &f/ee emergencyrestore <player>&c before joining another event."
 event-left: "{prefix}&7You left the event and your saved state was restored."
 event-player-joined: "{prefix}&7{player} joined the event."

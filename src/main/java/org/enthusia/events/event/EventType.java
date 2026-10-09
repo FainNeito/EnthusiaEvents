@@ -22,7 +22,9 @@ public enum EventType {
     BOAT_RACE,
     HORSE_RACE,
     ELYTRA_RACE,
-    PARKOUR;
+    PARKOUR,
+    RUNNER,
+    SPEEDBUILDERS;
 
     public static EventType parse(String raw) {
         String normalized = raw == null ? "" : raw.toUpperCase(java.util.Locale.ROOT);

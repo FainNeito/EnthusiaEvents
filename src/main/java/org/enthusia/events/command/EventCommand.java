@@ -50,9 +50,20 @@ public final class EventCommand implements CommandExecutor, TabCompleter {
             case "leave" -> leave(player);
             case "start" -> start(player, args);
             case "stats" -> openStats(player);
+            case "season" -> season(player, args);
+            case "browse" -> { plugin.eventTools().browse(player); yield true; }
+            case "schedule" -> { plugin.eventTools().schedule(player); yield true; }
             case "next", "time", "timer" -> sendNextEvent(player);
             default -> false;
         };
+    }
+
+    private boolean season(Player player, String[] args) {
+        if (args.length == 3 && args[1].equalsIgnoreCase("equip")) {
+            try { player.sendMessage(plugin.seasonProgress().equip(player.getUniqueId(), args[2])); }
+            catch (java.io.IOException | IllegalArgumentException failure) { player.sendMessage(failure.getMessage()); }
+        } else plugin.seasonProgress().view(player.getUniqueId()).forEach(player::sendMessage);
+        return true;
     }
 
     private void sendActiveEvent(Player player) {
@@ -147,7 +158,7 @@ public final class EventCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             return AdminCommandSupport.filter(
                     args[0],
-                    List.of("join", "leave", "spectate", "vote", "start", "stats", "next", "time", "timer")
+                    List.of("join", "leave", "spectate", "vote", "start", "stats", "next", "time", "timer", "browse", "schedule", "season")
             );
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("start")) {

@@ -1,0 +1,185 @@
+package org.enthusia.events.infrastructure;
+
+import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.ItemStack;
+import org.enthusia.events.EnthusiaEventsPlugin;
+import org.enthusia.events.config.EventConfigService;
+import org.enthusia.events.event.*;
+import org.enthusia.events.loot.LootTableService;
+import java.util.*;
+
+/** Read-only inventory views. Persistent edits use explicit validated staff commands. */
+public final class EventToolsGui implements Listener {
+    private static final int CONTENT_SLOTS = 45;
+    private static final int ACTION_SLOT = 49;
+    private static final int NEXT_SLOT = 53;
+    private static final int READINESS_SLOT = 31;
+    private final EnthusiaEventsPlugin plugin;
+    private final EventManager manager;
+    private final MapSetupService maps;
+    private final EventConfigService settings;
+    private final LootTableService lootTables;
+    public EventToolsGui(EnthusiaEventsPlugin plugin, EventManager manager, MapSetupService maps,
+                         EventConfigService settings, LootTableService loot) {
+        this.plugin = plugin; this.manager = manager; this.maps = maps; this.settings = settings; this.lootTables = loot;
+    }
+    private record View(String kind, EventType type, int tier, int page) implements InventoryHolder {
+        @Override public Inventory getInventory() { return null; }
+    }
+    private ItemStack item(Material material, String name, List<String> lore) {
+        var item = new ItemStack(material);
+        var meta = item.getItemMeta();
+        meta.setDisplayName("§6" + name);
+        meta.setLore(lore.stream().map(line -> "§7" + line).toList());
+        item.setItemMeta(meta); return item;
+    }
+    private Inventory inventory(View view, String title) {
+        return Bukkit.createInventory(view, 54, title);
+    }
+    public void browse(Player player) {
+        Inventory inv = inventory(new View("browse", null, 0, 0), "Events • Browse");
+        int slot = 0;
+        for (EventType type : EventType.values()) {
+            EventDefinition definition = plugin.eventRegistry().definition(type);
+            boolean enabled = definition != null && !manager.isEventDisabled(type);
+            String availability = !enabled ? "Disabled" : maps.usableMapsFor(type).isEmpty() ? "Needs map setup"
+                    : manager.isArenaResetting() ? "Arena resetting" : manager.hasSession() ? "Starts temporarily unavailable" : "Available";
+            inv.setItem(slot++, item(settings.icon(type), type.name().replace('_', ' '), List.of(
+                    settings.description(type), availability,
+                    "Minimum / ready: " + settings.minPlayers(type, 2) + " / " + settings.readyPlayers(type, 2),
+                    "Duration: " + settings.activePhaseSeconds(type, 300) + " seconds",
+                    "Winner reward: " + settings.winnerReward(type, 100), "Click for details")));
+        }
+        inv.setItem(ACTION_SLOT, item(Material.CLOCK, "Schedule", List.of(scheduleLabel(), "Click to inspect schedule")));
+        player.openInventory(inv);
+    }
+    public String scheduleLabel() {
+        if (!plugin.getConfig().getBoolean("schedule.enabled", false)) return "Automatic voting is off";
+        return "Next hourly vote: " + manager.nextHourlyVoteLabel() + " (server time)";
+    }
+    public void schedule(Player player) {
+        Inventory inv = inventory(new View("schedule", null, 0, 0), "Events • Schedule");
+        inv.setItem(22, item(Material.CLOCK, "Hourly vote", List.of(scheduleLabel(),
+                "A vote chooses an event; this is not a guaranteed start.", "Minimum players and map readiness still apply.")));
+        back(inv); player.openInventory(inv);
+    }
+    private void back(Inventory inv) { inv.setItem(ACTION_SLOT, item(Material.ARROW, "Browse events", List.of("Click to return"))); }
+    public void details(Player player, EventType type) {
+        Inventory inv = inventory(new View("details", type, 0, 0), "Events • " + type.name());
+        inv.setItem(22, item(settings.icon(type), type.name(), List.of(settings.description(type),
+                "Configured maps: " + maps.mapsFor(type).size(), "Ready maps: " + maps.usableMapsFor(type).size(),
+                "Minimum / ready: " + settings.minPlayers(type, 2) + " / " + settings.readyPlayers(type, 2),
+                "Use /event start " + type + " to request a start.")));
+        if (player.hasPermission("enthusia.events.admin"))
+            inv.setItem(READINESS_SLOT, item(Material.COMPARATOR, "Staff readiness", List.of("Click to inspect saved map validation")));
+        back(inv); player.openInventory(inv);
+    }
+    public void readiness(Player player, EventType type, int page) {
+        if (!player.hasPermission("enthusia.events.admin")) return;
+        List<EventMap> list = maps.mapsFor(type);
+        int maxPage = Math.max(0, (list.size() - 1) / CONTENT_SLOTS);
+        int selectedPage = Math.max(0, Math.min(page, maxPage));
+        Inventory inv = inventory(new View("readiness", type, 0, selectedPage), "Readiness • " + type.name());
+        for (int i = selectedPage * CONTENT_SLOTS; i < Math.min(list.size(), selectedPage * CONTENT_SLOTS + CONTENT_SLOTS); i++) {
+            EventMap map = list.get(i);
+            inv.setItem(i % CONTENT_SLOTS, readinessItem(map, type));
+        }
+        if (list.isEmpty()) inv.setItem(22, item(Material.BARRIER, "No saved maps", List.of("Create with /ee map create " + type + " <mapId>.")));
+        pagination(inv, selectedPage, maxPage); player.openInventory(inv);
+    }
+    private ItemStack readinessItem(EventMap map, EventType type) {
+        List<String> errors = maps.validate(map);
+        var lines = new ArrayList<String>();
+        lines.add(errors.isEmpty() ? "Ready" : "Needs setup");
+        lines.add("World: " + map.worldName());
+        lines.add("Spawns: " + String.join(", ", map.spawns().keySet()));
+        lines.add("Areas: " + String.join(", ", map.areas().keySet()));
+        lines.add("Points: " + String.join(", ", map.points().keySet()));
+        lines.add("Chests by tier: " + map.chests().entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue().size()).toList());
+        lines.add("Generators: " + map.generators().keySet());
+        lines.add("Checkpoints: " + map.checkpoints().keySet());
+        lines.add("Region: " + (map.region() == null ? "missing" : map.region().minX() + "," + map.region().minY() + "," + map.region().minZ()
+                + " to " + map.region().maxX() + "," + map.region().maxY() + "," + map.region().maxZ()));
+        lines.addAll(errors);
+        lines.add("Repair: /ee setup " + type + " " + map.id());
+        lines.add("Inspect commands: /ee map help");
+        return item(errors.isEmpty() ? Material.LIME_DYE : Material.RED_DYE, map.id(), lines);
+    }
+    public void loot(Player player, EventType type, int tier, int page, boolean sample) {
+        if (!player.hasPermission("enthusia.events.admin")) return;
+        var entries = lootTables.inspect(type, tier);
+        int maxPage = sample ? 0 : Math.max(0, (entries.size() - 1) / CONTENT_SLOTS);
+        int selectedPage = Math.max(0, Math.min(page, maxPage));
+        Inventory inv = inventory(new View(sample ? "sample" : "loot", type, tier, selectedPage),
+                (sample ? "Sample • " : "Loot • ") + type + " " + tier);
+        if (sample) fillSample(inv, type, tier);
+        else fillLootTable(inv, entries, type, tier, selectedPage);
+        var caps = lootTables.limits(type, tier);
+        inv.setItem(48, item(Material.COMPARATOR, "Limits (0 = unlimited)", List.of("Armor: " + caps.maxArmor(),
+                "Weapons: " + caps.maxWeapons(), "Total entries: " + caps.maxTotal(), "Edits blocked during events.")));
+        inv.setItem(ACTION_SLOT, item(Material.CHEST, sample ? "Back to table" : "Sample roll", List.of("Preview only; items cannot be taken.")));
+        pagination(inv, selectedPage, maxPage); player.openInventory(inv);
+    }
+    private void fillSample(Inventory inv, EventType type, int tier) {
+        var rolled = lootTables.roll(type, tier);
+        for (int i = 0; i < Math.min(CONTENT_SLOTS, rolled.size()); i++) inv.setItem(i, rolled.get(i));
+        inv.setItem(47, item(Material.PAPER, "Rolled entries: " + rolled.size(),
+                List.of("Showing the first " + Math.min(CONTENT_SLOTS, rolled.size()) + " entries.", "Sample only; no inventory transfer.")));
+    }
+    private void fillLootTable(Inventory inv, List<LootTableService.EntryView> entries, EventType type, int tier, int page) {
+        for (int i = page * CONTENT_SLOTS; i < Math.min(entries.size(), page * CONTENT_SLOTS + CONTENT_SLOTS); i++) {
+            var entry = entries.get(i);
+            inv.setItem(i % CONTENT_SLOTS, item(entry.material(), entry.id(), List.of(
+                    "Amount: " + entry.min() + "–" + entry.max(), "Chance: " + Math.round(entry.chance() * 100) + "%",
+                    "Edit: /ee loot " + type + " " + tier + " edit " + entry.id() + " <min> <max> <chance>")));
+        }
+    }
+    private void pagination(Inventory inv, int page, int max) {
+        if (page > 0) inv.setItem(CONTENT_SLOTS, item(Material.ARROW, "Previous", List.of("Click")));
+        if (page < max) inv.setItem(NEXT_SLOT, item(Material.ARROW, "Next", List.of("Click")));
+    }
+    @EventHandler public void click(InventoryClickEvent event) {
+        if (!(event.getView().getTopInventory().getHolder() instanceof View view)) return;
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player) || event.getRawSlot() < 0 || event.getRawSlot() >= 54) return;
+        int slot = event.getRawSlot();
+        // Never open inventories during InventoryClickEvent's transaction.
+        Bukkit.getScheduler().runTask(plugin, () -> navigate(player, view, slot));
+    }
+    private void navigate(Player player, View view, int slot) {
+        if (!player.isOnline()) return;
+        switch (view.kind) {
+            case "browse" -> navigateBrowse(player, slot);
+            case "loot", "sample" -> navigateLoot(player, view, slot);
+            case "readiness" -> {
+                if (isPageSlot(slot)) readiness(player, view.type, nextPage(view, slot));
+            }
+            default -> navigateDetails(player, view, slot);
+        }
+    }
+    private boolean isPageSlot(int slot) { return slot == CONTENT_SLOTS || slot == NEXT_SLOT; }
+    private int nextPage(View view, int slot) { return view.page + (slot == CONTENT_SLOTS ? -1 : 1); }
+    private void navigateBrowse(Player player, int slot) {
+        if (slot < EventType.values().length) details(player, EventType.values()[slot]);
+        else if (slot == ACTION_SLOT) schedule(player);
+    }
+    private void navigateLoot(Player player, View view, int slot) {
+        if (slot == ACTION_SLOT) loot(player, view.type, view.tier, 0, view.kind.equals("loot"));
+        else if (isPageSlot(slot)) loot(player, view.type, view.tier, nextPage(view, slot), false);
+    }
+    private void navigateDetails(Player player, View view, int slot) {
+        if (slot == READINESS_SLOT && view.kind.equals("details")) readiness(player, view.type, 0);
+        else if (slot == ACTION_SLOT) browse(player);
+    }
+    @EventHandler public void drag(InventoryDragEvent event) {
+        if (event.getView().getTopInventory().getHolder() instanceof View) event.setCancelled(true);
+    }
+}
