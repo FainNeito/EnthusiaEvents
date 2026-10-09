@@ -9,6 +9,8 @@ SPEAR order: spec -> prove -> engine -> arch -> refine. No project-local EARS/st
 - [x] Implement EVT-001 through EVT-009.
 - [x] Review platform boundaries, permissions, persistence/failure handling and private-session visibility.
 - [x] Canonical clean verify, configured API checks, interactive GUI preview and self-review.
-- [ ] Push reviewable PR; inspect exact-head hosted checks and review findings.
+- [x] Push reviewable PR; inspect exact-head hosted checks and review findings.
+
+Draft PR #15 is open in wsg138/EnthusiaEvents. Initial implementation head `a4fc9b3` has local clean verification. Hosted Quality run `37880807816` is `action_required`; CodeRabbit skipped the draft, and no review submissions/threads were present at inspection. Maintainer CI approval and independent review remain delivery gates, not passing checks.
 
 Runtime acceptance: carrier targeting/armor rendering on Java and Bedrock, full donor matches, staging reset cost and artifact activation are separate remaining gates. No production mutation authorized.

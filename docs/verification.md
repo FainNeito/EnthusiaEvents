@@ -29,7 +29,9 @@ The locally rendered sandbox preview was exercised through browser navigation an
 
 ## Hosted and runtime gates
 
-Hosted PR checks and review status are recorded after PR creation. A local passing build is not hosted CI or review approval. No server files, production settings, restarts or running versions were changed. The local test JAR is an unmerged review artifact, not a production release.
+Draft PR: https://github.com/wsg138/EnthusiaEvents/pull/15 . Initial implementation head `a4fc9b3c7e5d868e8b4ed21bc0bb4ba3c4a8bc02` has hosted Quality run `37880807816`, completed as `action_required`. CodeRabbit's success status represents a skipped draft review, not approval; no review submissions or threads were present at inspection. Later preview/evidence updates do not change compiled source. The current head is rechecked and recorded in the task-local delivery receipt.
+
+A local passing build is not hosted CI or review approval. No server files, production settings, restarts or running versions were changed. The local test JAR is an unmerged review artifact, not a production release. Version `1.0.0-SNAPSHOT`, SHA-256 `f3ef5bf2b8a08fb27d081fd92f601dae210dcb13379b82aad39aae2cef0b4b5e`.
 
 Before release, verify merge/commit, canonical clean build, monorepo dependency pin where applicable, version/hash and activation evidence. Stage and playtest:
 
