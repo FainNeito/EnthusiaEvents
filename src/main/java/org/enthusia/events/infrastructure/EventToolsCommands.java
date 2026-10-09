@@ -42,20 +42,21 @@ public final class EventToolsCommands {
                 case "preflight" -> preflight(sender, args);
                 case "recovery" -> recovery(sender, args);
                 case "trace" -> trace(sender, args);
-                case "resetarena" -> {
-                    if (manager.hasSession()) throw new IllegalArgumentException("Stop the event before retrying arena reset.");
-                    reset.reset();
-                    String failure = reset.failure();
-                    sender.sendMessage("Arena reset pending blocks: " + reset.pendingBlocks() + "; failure: "
-                            + (failure == null ? "none" : failure));
-                }
-                case "readiness" -> {
-                    if (args.length < EVENT_ARGUMENT_COUNT) throw new IllegalArgumentException("/ee readiness <EVENT>");
-                    gui.readiness(player(sender), EventType.parse(args[1]), 0);
-                }
+                case "resetarena" -> retryReset(sender);
+                case "readiness" -> readiness(sender, args);
                 case "loot" -> loot(sender, args);
                 default -> { }
         }
+    }
+    private void retryReset(CommandSender sender) {
+        if (manager.hasSession()) throw new IllegalArgumentException("Stop the event before retrying arena reset.");
+        reset.reset();
+        String failure = reset.failure();
+        sender.sendMessage("Arena reset pending blocks: " + reset.pendingBlocks() + "; failure: " + (failure == null ? "none" : failure));
+    }
+    private void readiness(CommandSender sender, String[] args) {
+        if (args.length < EVENT_ARGUMENT_COUNT) throw new IllegalArgumentException("/ee readiness <EVENT>");
+        gui.readiness(player(sender), EventType.parse(args[1]), 0);
     }
     private Player player(CommandSender sender) {
         if (sender instanceof Player player) return player;

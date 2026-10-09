@@ -21,6 +21,10 @@ import java.util.function.Consumer;
 
 /** Private opt-in game, with bounded plot work and session/round callback fences. */
 public final class Speedbuilders implements Listener {
+    private static final String PLOT_PREFIX = "plot-";
+    private static final String TEMPLATE_AREA = "build-template";
+    private static final String AIR_BLOCK_DATA = "minecraft:air";
+    private static final String BUILD_PHASE = "build";
     private final EnthusiaEventsPlugin plugin;
     private final EventManager manager;
     private EventSession tracked;
@@ -40,45 +44,63 @@ public final class Speedbuilders implements Listener {
         EventMap map = session.selectedMap();
         if (map == null || map.region() == null) return List.of("Arena region missing");
         List<String> errors = new ArrayList<>();
-        List<Map.Entry<String, CuboidRegion>> candidates = map.areas().entrySet().stream().filter(e -> e.getKey().startsWith("plot-")).sorted(Map.Entry.comparingByKey()).toList();
-        CuboidRegion source = map.areas().get("build-template");
-        if (source == null || candidates.size() < session.participants().size() || candidates.isEmpty()) return List.of("Set build-template and one plot-<id> area/spawn per player");
-        if (!integerBounds(source) || volume(source) < 1 || volume(source) > 512 || !ArenaPreflight.contains(map.region(), source)) errors.add("Template must be 1-512 cells inside the arena");
+        List<Map.Entry<String, CuboidRegion>> candidates = map.areas().entrySet().stream().filter(e -> e.getKey().startsWith(PLOT_PREFIX)).sorted(Map.Entry.comparingByKey()).toList();
+        CuboidRegion source = map.areas().get(TEMPLATE_AREA);
+        if (!hasRequiredPlots(source, candidates.size(), session.participants().size())) return List.of("Set build-template and one plot-<id> area/spawn per player");
+        if (!validTemplateBounds(source, map.region())) errors.add("Template must be 1-512 cells inside the arena");
         if (candidates.size() > 8) errors.add("Initial release supports at most eight plots");
-        for (int i = 0; i < candidates.size(); i++) {
-            var entry = candidates.get(i);
-            var plot = entry.getValue();
-            if (!integerBounds(plot) || !sameSize(source, plot) || !ArenaPreflight.contains(map.region(), plot)) errors.add(entry.getKey() + " must have template dimensions and be inside the arena");
-            if (!plot.contains(map.spawns().get(entry.getKey()))) errors.add(entry.getKey() + " requires a matching safe spawn inside its build volume");
-            Location spawn = map.spawns().get(entry.getKey());
-            if (spawn != null && (spawn.getBlockY() != plot.minY() || plot.maxY() - plot.minY() < 1)) errors.add(entry.getKey() + " spawn must be on the bottom layer of a build volume at least two blocks high; its solid floor stays outside the build volume");
-            if (overlaps(source, plot)) errors.add(entry.getKey() + " overlaps the source template");
-            for (int j = 0; j < i; j++) if (overlaps(plot, candidates.get(j).getValue())) errors.add(entry.getKey() + " overlaps another plot");
-        }
+        validatePlots(map, source, candidates, errors);
         if (!errors.isEmpty()) return List.copyOf(errors);
         World world = plugin.getServer().getWorld(map.worldName());
         if (world == null) return List.of("Original world is unavailable");
+        validateTemplate(source, candidates, map, world, errors);
+        return List.copyOf(errors);
+    }
+    private static boolean hasRequiredPlots(CuboidRegion source, int plots, int players) { return source != null && plots >= players && plots > 0; }
+    private static boolean validTemplateBounds(CuboidRegion source, CuboidRegion arena) {
+        return integerBounds(source) && volume(source) >= 1 && volume(source) <= 512 && ArenaPreflight.contains(arena, source);
+    }
+    private void validatePlots(EventMap map, CuboidRegion source, List<Map.Entry<String, CuboidRegion>> candidates, List<String> errors) {
+        for (int i = 0; i < candidates.size(); i++) {
+            var entry = candidates.get(i);
+            validatePlot(map, source, entry, errors);
+            for (int j = 0; j < i; j++) if (overlaps(entry.getValue(), candidates.get(j).getValue())) errors.add(entry.getKey() + " overlaps another plot");
+        }
+    }
+    private void validatePlot(EventMap map, CuboidRegion source, Map.Entry<String, CuboidRegion> entry, List<String> errors) {
+        CuboidRegion plot = entry.getValue();
+        if (!integerBounds(plot) || !sameSize(source, plot) || !ArenaPreflight.contains(map.region(), plot)) errors.add(entry.getKey() + " must have template dimensions and be inside the arena");
+        validatePlotSpawn(map.spawns().get(entry.getKey()), plot, entry.getKey(), errors);
+        if (overlaps(source, plot)) errors.add(entry.getKey() + " overlaps the source template");
+    }
+    private static void validatePlotSpawn(Location spawn, CuboidRegion plot, String label, List<String> errors) {
+        if (!plot.contains(spawn)) errors.add(label + " requires a matching safe spawn inside its build volume");
+        if (spawn != null && (spawn.getBlockY() != plot.minY() || plot.maxY() - plot.minY() < 1)) errors.add(label + " spawn must be on the bottom layer of a build volume at least two blocks high; its solid floor stays outside the build volume");
+    }
+    private void validateTemplate(CuboidRegion source, List<Map.Entry<String, CuboidRegion>> candidates, EventMap map, World world, List<String> errors) {
         try {
             Map<Offset, String> decoded = read(source, world);
             if (decoded.isEmpty()) errors.add("Template cannot be empty");
             for (String state : decoded.values()) if (!allowed(plugin.getServer().createBlockData(state).getMaterial())) { errors.add("Template contains unsupported material"); break; }
             if (decoded.values().stream().map(s -> plugin.getServer().createBlockData(s).getMaterial()).distinct().count() > 12) errors.add("Template palette exceeds twelve materials");
+            validateViewingCorners(decoded, candidates, map, errors);
+        } catch (RuntimeException failure) { errors.add("Template unavailable: " + failure.getMessage()); }
+    }
+    private static void validateViewingCorners(Map<Offset, String> decoded, List<Map.Entry<String, CuboidRegion>> candidates, EventMap map, List<String> errors) {
             for (var entry : candidates) {
                 Location spawn = map.spawns().get(entry.getKey());
                 Offset feet = new Offset(spawn.getBlockX() - (int) entry.getValue().minX(), spawn.getBlockY() - (int) entry.getValue().minY(), spawn.getBlockZ() - (int) entry.getValue().minZ());
                 if (decoded.containsKey(feet) || decoded.containsKey(new Offset(feet.x(), feet.y() + 1, feet.z()))) errors.add(entry.getKey() + " template obstructs the matching spawn; use the same clear viewing corner in every plot");
             }
-        } catch (RuntimeException failure) { errors.add("Template unavailable: " + failure.getMessage()); }
-        return List.copyOf(errors);
     }
     public void start(EventSession session) {
         stop();
         List<String> errors = validate(session);
         if (!errors.isEmpty()) { manager.stop("Speedbuilders preparation failed: " + String.join("; ", errors)); return; }
         tracked = session;
-        List<CuboidRegion> available = session.selectedMap().areas().entrySet().stream().filter(e -> e.getKey().startsWith("plot-")).sorted(Map.Entry.comparingByKey()).map(Map.Entry::getValue).toList();
+        List<CuboidRegion> available = session.selectedMap().areas().entrySet().stream().filter(e -> e.getKey().startsWith(PLOT_PREFIX)).sorted(Map.Entry.comparingByKey()).map(Map.Entry::getValue).toList();
         int i = 0;
-        List<String> names = session.selectedMap().areas().keySet().stream().filter(key -> key.startsWith("plot-")).sorted().toList();
+        List<String> names = session.selectedMap().areas().keySet().stream().filter(key -> key.startsWith(PLOT_PREFIX)).sorted().toList();
         for (UUID player : session.participants()) {
             plots.put(player, available.get(i)); totals.put(player, 0);
             Player online = plugin.getServer().getPlayer(player);
@@ -86,7 +108,7 @@ public final class Speedbuilders implements Listener {
                 manager.stop("Speedbuilders plot teleport failed"); stop(); return;
             }
         }
-        template = read(session.selectedMap().areas().get("build-template"), plugin.getServer().getWorld(session.selectedMap().worldName()));
+        template = read(session.selectedMap().areas().get(TEMPLATE_AREA), plugin.getServer().getWorld(session.selectedMap().worldName()));
         palette = template.values().stream().map(s -> plugin.getServer().createBlockData(s).getMaterial()).distinct().toList();
         round = 0;
         nextRound();
@@ -101,10 +123,11 @@ public final class Speedbuilders implements Listener {
             countdown(Math.clamp(plugin.getConfig().getInt("speedbuilders.memory-seconds", 30), 5, 120), this::build);
         });
     }
+    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops") // Distinct inventory stacks are required per player and stack.
     private void build() {
         phase = "clearing";
         mutatePlots(false, () -> {
-            phase = "build";
+            phase = BUILD_PHASE;
             players(p -> {
                 p.setGameMode(GameMode.SURVIVAL); p.getInventory().clear();
                 for (Material material : palette) {
@@ -140,6 +163,7 @@ public final class Speedbuilders implements Listener {
         manager.endActiveEvent(winners);
         stop();
     }
+    @SuppressWarnings("PMD.NullAssignment") // Null retires task/session references after cancellation.
     private void countdown(int seconds, Runnable next) {
         if (task != null) task.cancel();
         long token = ++generation;
@@ -151,6 +175,7 @@ public final class Speedbuilders implements Listener {
             if (remaining[0]-- <= 0) { task.cancel(); task = null; next.run(); }
         }, 0L, 20L);
     }
+    @SuppressWarnings("PMD.NullAssignment") // Null retires task/session references after cancellation.
     private void mutatePlots(boolean show, Runnable finished) {
         long token = ++generation;
         List<Map.Entry<CuboidRegion, Offset>> cells = new ArrayList<>();
@@ -167,7 +192,7 @@ public final class Speedbuilders implements Listener {
                     if (world == null || !world.isChunkLoaded(x >> 4, z >> 4)) throw new IllegalStateException("Plot chunk unavailable");
                     var block = world.getBlockAt(x, y, z);
                     if (block.getState() instanceof TileState) throw new IllegalStateException("Unexpected plot tile");
-                    block.setBlockData(plugin.getServer().createBlockData(show ? template.getOrDefault(offset, "minecraft:air") : "minecraft:air"), false);
+                    block.setBlockData(plugin.getServer().createBlockData(show ? template.getOrDefault(offset, AIR_BLOCK_DATA) : AIR_BLOCK_DATA), false);
                 }
                 if (cursor[0] == cells.size()) { task.cancel(); task = null; finished.run(); }
             } catch (RuntimeException failure) { manager.stop("Speedbuilders plot update failed; arena recovery retained"); stop(); }
@@ -185,11 +210,12 @@ public final class Speedbuilders implements Listener {
         }
         return Map.copyOf(result);
     }
+    @SuppressWarnings("PMD.NullAssignment") // Null retires task/session references after cancellation.
     public void stop() { generation++; if (task != null) { task.cancel(); task = null; } tracked = null; plots.clear(); totals.clear(); phase = "idle"; }
     private boolean current() { return tracked != null && manager.session() == tracked && tracked.phase() == EventPhase.ACTIVE; }
     private void players(Consumer<Player> action) { for (UUID uuid : plots.keySet()) { Player p = plugin.getServer().getPlayer(uuid); if (p != null && tracked.participants().contains(uuid)) action.accept(p); } }
     private boolean game() { return manager.session() != null && manager.session().definition().type() == EventType.SPEEDBUILDERS; }
-    private boolean mayEdit(Player p, Location location) { return current() && phase.equals("build") && tracked.participants().contains(p.getUniqueId()) && plots.containsKey(p.getUniqueId()) && plots.get(p.getUniqueId()).contains(location); }
+    private boolean mayEdit(Player p, Location location) { return current() && phase.equals(BUILD_PHASE) && tracked.participants().contains(p.getUniqueId()) && plots.containsKey(p.getUniqueId()) && plots.get(p.getUniqueId()).contains(location); }
     private boolean protectedEdit(Player player, Location location) {
         if (!game()) return false;
         EventMap map = manager.session().selectedMap();
@@ -217,7 +243,9 @@ public final class Speedbuilders implements Listener {
         CuboidRegion plot = plots.get(e.getPlayer().getUniqueId());
         if (plot != null && !plot.contains(e.getTo())) e.setTo(e.getFrom());
     }
-    private static boolean allowed(Material material) { String name = material.name(); return material == Material.STONE || material == Material.COBBLESTONE || material == Material.OAK_PLANKS || material == Material.BRICKS || material == Material.GLASS || name.endsWith("_WOOL") || name.endsWith("_TERRACOTTA") || material == Material.TERRACOTTA; }
+    private static final Set<Material> BASE_MATERIALS = Set.of(Material.STONE, Material.COBBLESTONE, Material.OAK_PLANKS, Material.BRICKS, Material.GLASS, Material.TERRACOTTA);
+    private static boolean allowed(Material material) { return BASE_MATERIALS.contains(material) || material.name().endsWith("_WOOL") || material.name().endsWith("_TERRACOTTA"); }
+
     private static boolean integerBounds(CuboidRegion r) {
         for (double value : new double[]{r.minX(), r.minY(), r.minZ(), r.maxX(), r.maxY(), r.maxZ()}) {
             if (!Double.isFinite(value) || value != Math.rint(value) || Math.abs(value) > 30_000_000) return false;

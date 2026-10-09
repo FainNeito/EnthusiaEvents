@@ -1,6 +1,6 @@
 # Release readiness
 
-Current PR #17 implements recovery/progression and includes unmerged PR #15. Canonical and explicit stable API clean verification each passed 55 tests and PMD. Local testing/builds resumed; reviewed merging is authorized, while deployment/client acceptance remain separate. See [roadmap-work.md](roadmap-work.md) for current behavior and limits. Upstream workflow approval and merge require write access unavailable to the connected account.
+Current PR #17 implements recovery/progression and includes unmerged PR #15. Canonical and explicit stable API clean verification each passed 56 tests and PMD. Local testing/builds resumed; reviewed merging is authorized, while deployment/client acceptance remain separate. See [roadmap-work.md](roadmap-work.md) for current behavior and limits. Upstream workflow approval and merge require write access unavailable to the connected account.
 
 The dated evidence below describes the earlier PR #15 delivery; its testing-hold statements are historical.
 

@@ -2007,10 +2007,15 @@ public final class EventManager {
 
     public boolean teleportGameParticipant(Player player, Location destination) {
         if (player == null || destination == null || session == null || session.phase() != EventPhase.ACTIVE
-                || !session.participants().contains(player.getUniqueId()) || session.selectedMap() == null
-                || session.selectedMap().region() == null || !session.selectedMap().region().contains(destination)) return false;
+                || !session.participants().contains(player.getUniqueId())) return false;
+        if (!gameDestinationAllowed(destination)) return false;
         allowTeleport(player.getUniqueId());
         return player.teleport(destination);
+    }
+
+    private boolean gameDestinationAllowed(Location destination) {
+        EventMap map = session.selectedMap();
+        return map != null && map.region() != null && map.region().contains(destination);
     }
 
     private void allowTeleport(UUID uuid) {

@@ -28,7 +28,7 @@ All new switches default false. Pending arena baselines and uncertain player jou
 
 ## Verification and gates
 
-Java 25.0.3 / Maven 3.9.11 canonical `clean verify` and explicit Paper `26.2.build.128-stable` `clean verify` both passed **55 tests**, zero failures/errors/skips, plus configured PMD. Declared profile is `26.2.build.39-alpha`.
+Java 25.0.3 / Maven 3.9.11 canonical `clean verify` and explicit Paper `26.2.build.128-stable` `clean verify` both passed **56 tests**, zero failures/errors/skips, plus configured PMD. Declared profile is `26.2.build.39-alpha`.
 
 Three new assertion failures established regressions before fixes: malformed historical health accepted; Speedbuilders cancelling unrelated builders outside the arena; stale callbacks stopping replacement tasks. New-feature coverage includes failed captures/acknowledgements, restart lease isolation, confirmed undo/state/permission binding, corrupt archive retention, arena disk reconstruction/replay/identity/unloaded paths, supported containers, score arithmetic, preflight budgets and seasonal duplicate/restart/exclusion/grace/policy/ownership rules. Mocked serialization is not native NBT proof; service/disk reconstruction is not a real server process-kill test.
 

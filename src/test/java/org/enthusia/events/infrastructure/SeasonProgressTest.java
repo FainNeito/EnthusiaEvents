@@ -48,6 +48,14 @@ class SeasonProgressTest {
   config.set("seasons.cosmetics.champion.wins",1);Files.writeString(root.resolve("seasons/test-proof/first").resolve(session.id()+".credit"),"corrupt original");
   assertTrue(new SeasonProgress(plugin,clock).view(id).getFirst().contains("unavailable"));assertEquals("corrupt original",Files.readString(root.resolve("seasons/test-proof/first").resolve(session.id()+".credit")));
  }
+ @Test void stationaryOnlinePlayerCannotReceiveParticipationDuringIdleGrace() throws Exception {
+  config.set("seasons.idle-seconds",60);
+  when(player.getLocation()).thenReturn(new Location(world,1,64,1));
+  var service=new SeasonProgress(plugin,clock);var idle=session(false);service.pin(idle,List.of(id));
+  participate(service,idle);service.complete(idle,Set.of(id));
+  assertTrue(String.join(";",service.view(id)).contains("Completed eligible events: 0"));
+  assertThrows(IllegalArgumentException.class,()->service.equip(id,"champion"));
+ }
  static final class MutableClock extends Clock {
   long now=Instant.parse("2026-01-01T00:00:00Z").toEpochMilli();void add(long value){now+=value;}
   public ZoneId getZone(){return ZoneOffset.UTC;}public Clock withZone(ZoneId zone){return this;}public Instant instant(){return Instant.ofEpochMilli(now);}

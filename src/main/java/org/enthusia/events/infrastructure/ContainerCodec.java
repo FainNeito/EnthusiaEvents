@@ -15,15 +15,19 @@ final class ContainerCodec {
         if (!(state instanceof Chest || state instanceof Barrel) || !(state instanceof Container c))
             throw new IOException("Unsupported tile " + state.getType());
         if (c.isLocked()) throw new IOException("Locked containers require a lossless lock-component codec");
-        if (c instanceof LootableInventory loot && (loot.getLootTable() != null || loot.getSeed() != 0
-                || loot.hasBeenFilled() || loot.hasPendingRefill() || loot.isRefillEnabled()))
-            throw new IOException("Loot-table/refill state unsupported");
+        rejectLootState(c);
         Base64.Encoder encoder = Base64.getEncoder();
         String name = c.customName() == null ? "" : GsonComponentSerializer.gson().serialize(c.customName());
         return "EE-CONTAINER-1\n" + c.getType().name() + "\n"
                 + encoder.encodeToString(ItemStack.serializeItemsAsBytes(c.getSnapshotInventory().getContents())) + "\n"
                 + encoder.encodeToString(c.getPersistentDataContainer().serializeToBytes()) + "\n" + name;
     }
+    private static void rejectLootState(Container c) throws IOException {
+        if (c instanceof LootableInventory loot && (loot.getLootTable() != null || loot.getSeed() != 0
+                || loot.hasBeenFilled() || loot.hasPendingRefill() || loot.isRefillEnabled()))
+            throw new IOException("Loot-table/refill state unsupported");
+    }
+    @SuppressWarnings("PMD.NullAssignment") // Bukkit null removes an absent custom name.
     static void apply(Block block, String payload) throws IOException {
         String[] parts = payload.split("\n", 5);
         if (parts.length != 5 || !parts[0].equals("EE-CONTAINER-1") || !parts[1].equals(block.getType().name()))

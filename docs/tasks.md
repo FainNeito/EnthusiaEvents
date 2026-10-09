@@ -58,7 +58,7 @@ This follow-up changes documentation and command help only. Spec/source inspecti
 - [x] Supported container codec and automated replay verification.
 - [x] Historical preview/confirm, undo and durable uncertainty reconciliation; resolved-only retention.
 - [x] Seasonal participation/grace, personal bests, owned cosmetic selection.
-- [x] Regression proof and canonical/API matrix: 55 tests and PMD on each profile.
+- [x] Regression proof and canonical/API matrix: 56 tests and PMD on each profile.
 - [ ] Exact-head hosted review/CI and merge authorized source; upstream account is read-only.
 - [x] Refresh interactive preview and confirm saved Page readback.
 

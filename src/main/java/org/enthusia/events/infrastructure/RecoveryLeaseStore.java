@@ -8,8 +8,12 @@ import java.util.UUID;
 /** Durable application fence. Unknown/corrupt states fail closed; no automatic inventory replay. */
 public final class RecoveryLeaseStore {
     private final Path root;
+    private final java.util.concurrent.ConcurrentHashMap<UUID, Boolean> isolation = new java.util.concurrent.ConcurrentHashMap<>();
     public RecoveryLeaseStore(Path root) { this.root = root; }
     public boolean blocked(UUID player) {
+        return isolation.computeIfAbsent(player, this::readBlocked);
+    }
+    private boolean readBlocked(UUID player) {
         try { String state = state(player); return !state.equals("CLEAR") && !state.equals("APPLIED") && !state.equals("RECONCILED"); }
         catch (IOException | RuntimeException failure) { return true; }
     }
@@ -26,6 +30,8 @@ public final class RecoveryLeaseStore {
         UUID operation = UUID.randomUUID();
         String payload = "EE-PLAYER-LEASE-1\n" + player + "\n" + operation + "\nAPPLYING\n" + capture + "\n" + undo
                 + "\n" + clean(actor) + "\n" + clean(reason) + "\n" + fingerprint + "\n";
+        // Fail closed before publication; event guards use this cache instead of disk IO on every interaction.
+        isolation.put(player, true);
         publish(file(player), payload);
         publish(root.resolve("audit").resolve(operation + ".begin"), payload);
         return operation;
@@ -41,6 +47,7 @@ public final class RecoveryLeaseStore {
         publish(root.resolve("audit").resolve(operation + "." + state.toLowerCase(java.util.Locale.ROOT)),
                 payload + clean(actor) + "\n" + clean(reason) + "\n");
         publish(file(player), payload);
+        isolation.put(player, false);
     }
     public UUID operation(UUID player) throws IOException { return UUID.fromString(read(file(player))[2]); }
     private Path file(UUID player) { return root.resolve(player + ".lease"); }
