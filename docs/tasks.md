@@ -11,9 +11,9 @@ SPEAR order: spec -> prove -> engine -> arch -> refine. No project-local EARS/st
 - [x] Canonical clean verify, configured API checks, interactive GUI preview and self-review.
 - [x] Push reviewable PR; inspect exact-head hosted checks and review findings.
 
-Draft PR #15 is open in wsg138/EnthusiaEvents. Initial implementation head `a4fc9b3` has local clean verification. Hosted Quality run `37880807816` is `action_required`; CodeRabbit skipped the draft, and no review submissions/threads were present at inspection. Maintainer CI approval and independent review remain delivery gates, not passing checks.
+PR #15 is open and ready for review in wsg138/EnthusiaEvents. Initial head `a4fc9b3` had passing local checks and an approval-blocked upstream workflow; CodeRabbit initially skipped the draft. Those are historical states. Current evidence and remaining gates are in release-readiness.md.
 
-Runtime acceptance: carrier targeting/armor rendering on Java and Bedrock, full donor matches, staging reset cost and artifact activation are separate remaining gates. No production mutation authorized.
+Runtime acceptance: carrier targeting/armor rendering on Java and Bedrock, full donor matches and staging reset cost remain pending. An unmerged candidate was activated on TEST before the testing hold. Production has not changed.
 
 ## Follow-up 2026-10-09
 
@@ -22,6 +22,21 @@ Runtime acceptance: carrier targeting/armor rendering on Java and Bedrock, full 
 - [x] Re-run canonical verification after refinement and inspect hosted checks for the refined head.
 - [x] Prepare an isolated TEST playtest plan with rollback, fixture setup and explicit client acceptance evidence.
 
-CodeRabbit's first completed review identified three applicable findings: spectate withdrawal misses evidence/last-survivor completion; reset status should say `none`; the trace writer should recover after transient file errors. Establish focused withdrawal/file-recovery regressions before correcting those paths. TEST stays stopped until its staged candidate includes these fixes.
+CodeRabbit's first completed review identified three applicable findings: spectate withdrawal misses evidence/last-survivor completion; reset status should say `none`; the trace writer should recover after transient file errors. Focused regressions were established before correcting those paths; all three review threads are resolved.
 
-All three findings are corrected; three focused assertions fail on the reviewed implementation and pass here. Canonical and TEST-runtime API clean verification each pass 31 tests. Inspect new-head hosted checks after pushing; upstream workflow approval remains unavailable to this account. Java/Bedrock acceptance remains pending.
+All three findings are corrected; three focused assertions failed on the reviewed implementation and passed after correction. Canonical and TEST-runtime API clean verification each passed 31 tests on `fca7f5a`. Codacy and exact-source fork CI passed on that commit; upstream workflow approval remains unavailable to this account. Java/Bedrock acceptance remains pending.
+
+## Testing hold and non-runtime work
+
+- [x] Re-fetch current main and preserve the clean PR source base.
+- [x] Reconcile task/verification state with completed review and historical TEST activation.
+- [x] Confirm all three review threads remain resolved.
+- [x] Review current network build ownership; no EnthusiaEvents entry exists in its current main tree.
+- [x] Add source-status matrix, standalone release/rollback gates and unreleased notes.
+- [x] Include new commands in existing usage text; preserve handlers, aliases and permissions.
+- [x] Mark testing on hold without changing server files or claiming new acceptance.
+- [ ] Obtain human review and upstream workflow approval.
+- [ ] Resume client/playtest cases only when the user lifts the hold.
+- [ ] Merge and produce a canonical release only after the remaining gates and explicit authorization.
+
+This follow-up changes documentation and command help only. Spec/source inspection and text consistency checks apply; behavioral proof and engine implementation do not apply because no gameplay or persistence behavior changes. No local test/build or server action is performed during this follow-up. Existing PR workflows may run automatically when the branch is updated; their results are recorded separately.

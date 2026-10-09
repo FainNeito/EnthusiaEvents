@@ -1,5 +1,7 @@
 # Isolated TEST acceptance
 
+Status on 2026-10-09: player/client testing is on hold at the user's request. Do not start sessions, invite testers, change TEST fixtures or restart servers while this hold is in effect. The earlier startup and empty-session smoke evidence is historical; it does not mark any acceptance case below as passed. See release-readiness.md for the source and artifact state.
+
 This is an unmerged test build. It is not a production release. Record the exact source commit and SHA-256 before upload, and verify the running plugin after a controlled TEST restart. Do not copy production databases or enable Discord integrations for this exercise.
 
 ## Preparation and rollback

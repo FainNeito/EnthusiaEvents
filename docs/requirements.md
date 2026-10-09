@@ -12,6 +12,7 @@ Base: authoritative main `58d4a6dea746c4a51dc4999230d6107b93ed672f`. User author
 - EVT-008: The system shall preserve existing commands, permissions, economy amounts, config semantics and success-aware player restoration.
 - EVT-009: The system shall encapsulate reusable game/cleanup rules outside the monolithic listener and provide a disabled-by-default Runner mode with tracked block removal and complete restoration.
 - EVT-010: Every new GUI shall have an accurate interactive preview with clickable mobile-accessible delivery or an explicitly reported delivery limitation. Client rendering and gameplay acceptance shall remain separate from automated checks.
+- EVT-011: Command usage and delivery records shall describe the implemented commands and current evidence accurately, distinguish historical checks from current checks, and honor an explicit hold on testing.
 
 Scope decisions: preserve hourly voting; no arbitrary weekly calendar or new payout policy. Runner is the recommended first new game; Speedbuilders/Paint Panic remain later alternatives rather than simultaneous replacements. No direct Surf inventory-restore transplant, dummy-entity dependency, automatic Discord webhook or guild-XP policy is introduced.
 

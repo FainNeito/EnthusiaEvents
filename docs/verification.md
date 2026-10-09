@@ -15,9 +15,9 @@ Additional coverage exercises intercepted captive attacks and explicit cancellat
 
 ## Local checks
 
-- Canonical `mvn --batch-mode --no-transfer-progress clean verify`: 28 tests, zero failures/errors/skips; compile, package and configured command PMD checks passed.
+- Earlier canonical `mvn --batch-mode --no-transfer-progress clean verify`: 28 tests, zero failures/errors/skips. The corrected implementation `fca7f5a` subsequently passed 31 tests; see refinement below.
 - JDK 25.0.3, Maven 3.9.11, repository's configured Paper API `26.2.build.39-alpha`.
-- `git diff --check` clean. One API profile is declared; no additional profile is claimed.
+- `git diff --check` clean. One API profile is declared; an additional explicit TEST runtime API override was verified later, as recorded below.
 - Manual review checked reset queue retention, default balance preservation, command permissions, deferred inventory navigation, private-session identity exposure, existing snapshot behavior and optional Runner wiring. No new companion-plugin API dependency.
 - No project-local EARS validator/state helpers were present. Requirements/task/evidence records are manual; no automated SPEAR tooling pass is claimed.
 
@@ -29,9 +29,9 @@ The locally rendered sandbox preview was exercised through browser navigation an
 
 ## Hosted and runtime gates
 
-Draft PR: https://github.com/wsg138/EnthusiaEvents/pull/15 . Initial implementation head `a4fc9b3c7e5d868e8b4ed21bc0bb4ba3c4a8bc02` has hosted Quality run `37880807816`, completed as `action_required`. CodeRabbit's success status represents a skipped draft review, not approval; no review submissions or threads were present at inspection. Later preview/evidence updates do not change compiled source. The current head is rechecked and recorded in the task-local delivery receipt.
+PR: https://github.com/wsg138/EnthusiaEvents/pull/15 . Initial head `a4fc9b3c7e5d868e8b4ed21bc0bb4ba3c4a8bc02` had upstream Quality run `37880807816`, completed as `action_required`, and a skipped draft review. The PR is now ready for review; CodeRabbit's three later findings were corrected and resolved. A resolved automated review is separate from human approval.
 
-A local passing build is not hosted CI or review approval. No server files, production settings, restarts or running versions were changed. The local test JAR is an unmerged review artifact, not a production release. Version `1.0.0-SNAPSHOT`, SHA-256 `f3ef5bf2b8a08fb27d081fd92f601dae210dcb13379b82aad39aae2cef0b4b5e`.
+A local passing build is not hosted CI or review approval. The initial local artifact had Maven version `1.0.0-SNAPSHOT` and SHA-256 `f3ef5bf2b8a08fb27d081fd92f601dae210dcb13379b82aad39aae2cef0b4b5e`; it is historical. The corrected unmerged candidate was later activated on isolated TEST. Production was not changed. Exact current TEST artifact provenance is in release-readiness.md.
 
 Before release, verify merge/commit, canonical clean build, monorepo dependency pin where applicable, version/hash and activation evidence. Stage and playtest:
 
@@ -55,3 +55,11 @@ Codacy subsequently passed with zero new issues at `b973a48`. The existing Quali
 CodeRabbit completed its review of `b973a48` with three applicable findings. Added two spectate-withdrawal tests and a transient trace-file recovery test first: all three failed with assertions against the unchanged reviewed implementation (zero fixture/compile errors). Corrected shared leave/spectate completion/evidence, reset status wording and per-record IO recovery with one warning and counted drops. Canonical clean verify now passes 31 tests and configured PMD. TEST Paper API `26.2.build.128-stable` was also checked with 28 tests before this correction; the corrected head receives a fresh runtime-profile check before installation. Remaining player/client cases are explicitly pending.
 
 The corrected source also passed a fresh clean verify with `-Dpaper.api.version=26.2.build.128-stable`: 31 tests, zero failures/errors/skips, configured PMD passed. TEST runtime is Paper 26.2 build 128; startup and real client acceptance remain distinct from this API check.
+
+## Corrected source and TEST smoke evidence
+
+Implementation commit `fca7f5a3960783a5d96f624f9518de9c9f1cced8` passed Codacy with zero new issues and fork Quality run `37883242465`. Upstream run `37883240850` is `action_required`. All three review threads were confirmed resolved on the follow-up inspection.
+
+Before the testing hold, a checksum-verified candidate enabled on TEST with CombatLogX and NotBounties integrations. An empty private Runner session selected its isolated map, stopped normally and persisted two trace records with zero drops and reset pending=0. No players participated. Existing incomplete map setup was reported separately; no full game, inventory restoration, hitbox or rendering acceptance is claimed.
+
+The user then put testing on hold. This follow-up reconciles documentation, release boundaries and command usage only. Current main was fetched and remained `58d4a6d`. No gameplay code, tests, dependencies, workflow, reward policy or default configuration changed; no local tests/builds or server actions were performed. Text review and `git diff --check` are appropriate to this scope. Existing automatic hosted checks on a documentation/help commit do not extend runtime acceptance.
