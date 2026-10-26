@@ -2650,10 +2650,12 @@ public final class EventManager {
             return;
         }
         try {
-            Sound sound = Sound.valueOf(soundName.toUpperCase(Locale.ROOT));
             float volume = (float) plugin.getConfig().getDouble(path + ".volume", 0.7D);
             float pitch = (float) plugin.getConfig().getDouble(path + ".pitch", 1.0D);
-            player.playSound(player.getLocation(), sound, volume, pitch);
+            if (!org.enthusia.events.infrastructure.sound.CustomSound.play(player, soundName, volume, pitch)) {
+                Sound sound = Sound.valueOf(soundName.toUpperCase(Locale.ROOT));
+                player.playSound(player.getLocation(), sound, volume, pitch);
+            }
         } catch (IllegalArgumentException ex) {
             plugin.getLogger().warning("Invalid configured sound at " + path + ": " + soundName);
         }
