@@ -1,0 +1,73 @@
+<div id="events-roadmap-source-preview">
+  <h3>Event recovery and progression states</h3>
+  <div class="viz-controls">
+    <label class="form-label">Feature<select class="form-select" data-feature>
+      <option value="preflight">Arena preflight</option><option value="arena">Arena recovery</option>
+      <option value="player">Player history</option><option value="build">Private Speedbuilders</option><option value="season">Season progress</option>
+    </select></label>
+    <label class="form-label">State<select class="form-select" data-state></select></label>
+  </div>
+  <div aria-live="polite"><h3 data-title></h3><pre><code data-output></code></pre></div>
+  <p class="text-small">Simulated fixtures · opt-ins default off · no server actions</p>
+</div>
+<style>
+#events-roadmap-source-preview { max-width:100%; overflow-wrap:anywhere; }
+#events-roadmap-source-preview pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('events-roadmap-source-preview');
+  const feature = root.querySelector('[data-feature]'), state = root.querySelector('[data-state]');
+  const data = {
+    preflight: [
+      ['Ready', '/ee preflight RUNNER donor-floor\nPreflight RUNNER/donor-floor world=example: READY'],
+      ['Unloaded chunk', 'Preflight RUNNER/donor-floor world=example: BLOCKED/UNKNOWN\nUNKNOWN spawn 8,70,8: chunk unloaded; Load the existing chunk and inspect again'],
+      ['Broken bed', 'Preflight BEDWARS/islands world=example: BLOCKED/UNKNOWN\nBLOCKER bed-red: bed partner invalid; Repair both matching bed halves'],
+      ['Recovery outstanding', 'Arena recovery/reset is outstanding; activation remains blocked.']
+    ],
+    arena: [
+      ['Disabled opt-in', 'recovery.arena.enabled: false\nExisting memory reset remains available. New durable capture does not run.'],
+      ['Startup quarantine', 'Arena recovery: leased/quarantined\nUnfinished baseline found on startup; inspect then retry.\n/ee recovery inspect'],
+      ['Retry', '/ee recovery retry\nRestore supported blocks and unlocked non-loot-table chests/barrels in bounded batches. Verify canonical states, serialized items, names and PDC before completion. Original world UUID and saved region must match.'],
+      ['Unsupported tile', 'Preparation rejected: Unsupported tile\nSigns, locked containers and loot-table/refill metadata remain unsupported and block activation. Original state is retained.']
+    ],
+    player: [
+      ['History', '/ee recovery player <uuid>\nRecovery state: CLEAR\n<fixture-capture-id> captured=<fixture-time> resolved'],
+      ['Confirm historical recovery', '/ee recovery preview <uuid> <capture> <reason>\nInventory differs=true; armor differs=false; XP=30 -> 10; mode=SURVIVAL -> SURVIVAL\nConfirm within 90s: /ee recovery confirm <token>\nActor, version hash, permission and current state are rechecked. Undo capture is saved before application.'],
+      ['Uncertain application', 'Recovery state: APPLYING\nAutomatic replay and transfers are blocked.\nInspect current inventory and external transfers, then /ee recovery reconcile <uuid> <reason> and confirm. Reconciliation applies no inventory.'],
+      ['Capture save failure', 'Snapshot persistence not acknowledged. Event entry stops before temporary inventory changes. Previous in-memory entry is restored.'],
+      ['Corrupt storage', 'Snapshot storage unreadable; preserved original file and blocked captures.'],
+      ['Retention', '/ee recovery prune <uuid>\nRetention defaults off; example configured limits: five resolved versions / 30 days.\nOnly verified resolved history can be pruned. Pending, corrupt, current and confirmation-protected records remain.']
+    ],
+    build: [
+      ['Preparation', 'Private opt-in only. Up to eight equivalent plots. One ordinary-block template, 1–512 cells. Durable recovery required. Currency rewards disabled.'],
+      ['Memory', 'Speedbuilders round 1: memorize the build.\nRound 1 · memory · 30s'],
+      ['Build', 'Build the remembered template in your plot. Extra blocks reduce your score.\nRound 1 · build · 90s'],
+      ['Score', 'Score 8/12; matched=10 missing=1 wrong=1 extra=2'],
+      ['Tie', 'Speedbuilders complete: Alex, Sam (40 points). Equal top scores share the result; currency rewards are disabled.']
+    ],
+    season: [
+      ['Disabled', 'Season progress is disabled.'],
+      ['Test environment', 'This environment is excluded from season credit.'],
+      ['Progress', 'Season example-season ends <configured end and timezone>\nCompleted eligible events: 3; wins: 1\nPersonal best PARKOUR/example-course#<setup-hash>: 42000ms\nPrivate/test/cancelled and inactive players are excluded; no currency or external grants.'],
+      ['Cosmetic milestone', 'Example operator-configured catalogue (not live policy):\nchampion UNLOCKED requires completed=3, wins=1; victory title=Champion\n/event season equip champion\nSelected cosmetic: champion'],
+      ['Victory cue', 'Example selected title shown to its owner:\nChampion\nSeason example-season\nCatalogue starts empty. This cosmetic grants no items, currency or external permissions.'],
+      ['Storage failure', 'Season completion failed; progress frozen for reconciliation.'],
+      ['No active season', 'No season is active. Previous season credit is retained; lifetime stats are unchanged.']
+    ]
+  };
+  function render() {
+    const item = data[feature.value][Number(state.value) || 0];
+    root.querySelector('[data-title]').textContent = item[0]; root.querySelector('[data-output]').textContent = item[1];
+  }
+  function options(index = 0) {
+    state.replaceChildren(...data[feature.value].map((item, i) => { const option = document.createElement('option'); option.value = i; option.textContent = item[0]; return option; }));
+    state.value = String(Math.min(index, data[feature.value].length - 1)); render();
+  }
+  function save() { window.openai?.setWidgetState?.({modelContent:{feature:feature.value,state:Number(state.value)}})?.catch(() => {}); }
+  function restore(value) { if (!value || !data[value.feature]) return; feature.value=value.feature; options(Number.isInteger(value.state) && value.state >= 0 ? value.state : 0); }
+  feature.addEventListener('change', () => { options(); save(); }); state.addEventListener('change', () => { render(); save(); });
+  options(); restore(window.openai?.widgetState?.modelContent);
+  window.addEventListener('openai:set_globals', e => restore(e.detail?.globals?.widgetState?.modelContent));
+})();
+</script>

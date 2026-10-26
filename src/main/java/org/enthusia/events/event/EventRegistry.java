@@ -53,11 +53,11 @@ public final class EventRegistry {
     }
 
     public List<EventDefinition> all() {
-        return new ArrayList<>(definitions.values());
+        return definitions.values().stream().filter(d -> d.type() != EventType.SPEEDBUILDERS).toList();
     }
 
     public List<EventDefinition> randomChoices(int amount) {
-        List<EventDefinition> pool = new ArrayList<>(definitions.values());
+        List<EventDefinition> pool = new ArrayList<>(all());
         List<EventDefinition> out = new ArrayList<>();
         while (!pool.isEmpty() && out.size() < amount) {
             out.add(pool.remove(ThreadLocalRandom.current().nextInt(pool.size())));

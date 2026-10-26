@@ -6,9 +6,14 @@ EnthusiaEvents is a Paper/Leaf event plugin for running scheduled, voted, privat
 
 ## Documentation
 
+- [`docs/roadmap-work.md`](docs/roadmap-work.md) — recovery/progression, opt-ins, supported containers, historical confirmation, retention, private Speedbuilders and seasonal cosmetics. Records local proof and pending CI/client/release gates.
 - [`PLAYER_GUIDE.md`](PLAYER_GUIDE.md) — current player-facing mechanics and live Enthusia SMP deployment behavior. Use this as the primary source for future wiki/player documentation.
 - [`Specifications.md`](Specifications.md) — original/development specification; some deployment values and older design statements may no longer match current code/config.
 - [`TESTING.md`](TESTING.md) — implementation/testing coverage.
+- [`docs/implementation.md`](docs/implementation.md) — PR #15 fixes, optional Runner and operating commands.
+- [`docs/source-status.md`](docs/source-status.md) — source protections and remaining acceptance boundaries.
+- [`docs/release-readiness.md`](docs/release-readiness.md) — artifact provenance and release gates.
+- [`docs/release-notes.md`](docs/release-notes.md) — unpublished notes for the unmerged improvements.
 
 ## Supported Events
 

@@ -35,9 +35,9 @@ public record PlayerSnapshot(
     public static PlayerSnapshot capture(Player player) {
         return new PlayerSnapshot(
                 player.getLocation().clone(),
-                player.getInventory().getContents().clone(),
-                player.getInventory().getArmorContents().clone(),
-                player.getInventory().getItemInOffHand().clone(),
+                copyItems(player.getInventory().getContents()),
+                copyItems(player.getInventory().getArmorContents()),
+                copyItem(player.getInventory().getItemInOffHand()),
                 captureMaxHealth(player),
                 Math.min(player.getHealth(), player.getMaxHealth()),
                 player.getFoodLevel(),
@@ -53,6 +53,13 @@ public record PlayerSnapshot(
                 player.getWalkSpeed(),
                 player.getFlySpeed()
         );
+    }
+
+    private static ItemStack copyItem(ItemStack item) { return item == null ? null : item.clone(); }
+    private static ItemStack[] copyItems(ItemStack[] items) {
+        ItemStack[] copied = new ItemStack[items.length];
+        for (int i = 0; i < items.length; i++) copied[i] = copyItem(items[i]);
+        return copied;
     }
 
     private static double captureMaxHealth(Player player) {

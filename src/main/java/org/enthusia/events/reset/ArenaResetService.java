@@ -43,84 +43,76 @@ public final class ArenaResetService implements Listener {
         this.eventManager = eventManager;
     }
 
+    private String lastFailure = "";
+
+    public boolean isResetting() { return resetTask != null || !pendingRestore.isEmpty()
+            || (plugin.arenaRecovery() != null && plugin.arenaRecovery().blocked()); }
+    public int pendingBlocks() { return pendingRestore.size(); }
+    public String failure() { return lastFailure.isEmpty() ? null : lastFailure; }
+
     public void reset() {
-        if (resetTask != null) {
+        if (resetTask != null) return;
+        // A retry retains the failed head and every unattempted state.
+        if (!originalStates.isEmpty()) {
+            pendingRestore.addAll(originalStates.values().stream().toList().reversed());
+            originalStates.clear();
+        }
+        if (pendingRestore.isEmpty()) {
+            if (plugin.arenaRecovery() != null) plugin.arenaRecovery().reset();
             return;
         }
-        List<BlockState> states = originalStates.values().stream().toList().reversed();
-        if (states.isEmpty()) {
-            return;
-        }
-        originalStates.clear();
-
+        lastFailure = "";
         int synchronousLimit = Math.max(0, plugin.getConfig().getInt("reset.max-blocks-per-session", 50_000));
-        if (states.size() <= synchronousLimit) {
-            restoreStates(states);
-            return;
-        }
-
-        pendingRestore.clear();
-        pendingRestore.addAll(states);
-        int perTick = Math.max(100, plugin.getConfig().getInt("reset.max-blocks-per-tick", 2_000));
-        plugin.getLogger().warning("Arena reset contains " + states.size()
-                + " tracked blocks, above reset.max-blocks-per-session (" + synchronousLimit
-                + "). Restoring safely in batches of " + perTick + " blocks per tick instead of discarding reset data.");
-        resetTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> restoreBatch(perTick), 1L, 1L);
-    }
-
-    private void restoreStates(List<BlockState> states) {
-        for (BlockState state : states) {
-            state.update(true, false);
+        if (pendingRestore.size() <= synchronousLimit) {
+            restoreBatch(pendingRestore.size());
+        } else {
+            int perTick = Math.max(100, plugin.getConfig().getInt("reset.max-blocks-per-tick", 2_000));
+            resetTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> restoreBatch(perTick), 1L, 1L);
         }
     }
 
     private void restoreBatch(int perTick) {
-        int restored = 0;
-        while (restored < perTick && !pendingRestore.isEmpty()) {
-            BlockState state = pendingRestore.pollFirst();
-            if (state != null) {
-                state.update(true, false);
+        for (int i = 0; i < perTick && !pendingRestore.isEmpty(); i++) {
+            BlockState state = pendingRestore.peekFirst();
+            try {
+                if (!state.update(true, false)) throw new IllegalStateException("BlockState.update returned false");
+                pendingRestore.removeFirst();
+            } catch (RuntimeException exception) {
+                lastFailure = exception.getClass().getSimpleName() + ": " + exception.getMessage();
+                cancelResetTask();
+                plugin.getLogger().severe("Arena reset paused with " + pendingRestore.size()
+                        + " blocks retained. New events are blocked. Retry with /ee resetarena. " + lastFailure);
+                return;
             }
-            restored++;
         }
-        if (!pendingRestore.isEmpty()) {
-            return;
-        }
-        if (resetTask != null) {
-            resetTask.cancel();
-            resetTask = null;
+        if (pendingRestore.isEmpty()) {
+            cancelResetTask();
+            if (plugin.arenaRecovery() != null && plugin.isEnabled()) plugin.arenaRecovery().reset();
+            plugin.recordSessionEvidence(eventManager.session(), "arena-reset-complete", null);
         }
     }
 
-    /**
-     * Bukkit cancels plugin tasks during disable. Finish any outstanding reset before that
-     * state can be stranded, including blocks captured after a batched reset started.
-     */
+    @SuppressWarnings("PMD.NullAssignment") // Retire the cancelled Bukkit task reference.
+    private void cancelResetTask() {
+        if (resetTask != null) { resetTask.cancel(); resetTask = null; }
+    }
+
+    /** Finish before Bukkit cancels tasks. Failed states remain retained in memory;
+     * this is not a crash-recovery journal. */
     public void finishPendingSynchronously() {
-        if (resetTask != null) {
-            resetTask.cancel();
-            resetTask = null;
-        }
-        while (!pendingRestore.isEmpty()) {
-            BlockState state = pendingRestore.pollFirst();
-            if (state != null) {
-                state.update(true, false);
-            }
-        }
-        if (!originalStates.isEmpty()) {
-            List<BlockState> states = originalStates.values().stream().toList().reversed();
-            originalStates.clear();
-            restoreStates(states);
-        }
+        // Durable work remains on disk for explicit restart reconciliation; never discard it on shutdown.
+        if (plugin.arenaRecovery() != null) plugin.arenaRecovery().shutdown();
+        cancelResetTask();
+        pendingRestore.addAll(originalStates.values().stream().toList().reversed());
+        originalStates.clear();
+        lastFailure = "";
+        restoreBatch(pendingRestore.size());
     }
 
     public void clear() {
-        originalStates.clear();
-        pendingRestore.clear();
-        if (resetTask != null) {
-            resetTask.cancel();
-            resetTask = null;
-        }
+        if (isResetting() || !originalStates.isEmpty())
+            throw new IllegalStateException("Cannot discard unrestored arena states");
+        lastFailure = "";
     }
 
     public void recordBlock(Block block) {
@@ -190,7 +182,8 @@ public final class ArenaResetService implements Listener {
     }
 
     private boolean isResetTracked(EventType type) {
-        return type == EventType.SPLEEF
+        return type == EventType.RUNNER
+                || type == EventType.SPLEEF
                 || type == EventType.SPLEGG
                 || type == EventType.BEDWARS
                 || type == EventType.SKYWARS
